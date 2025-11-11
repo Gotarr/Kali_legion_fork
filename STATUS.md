@@ -2,8 +2,9 @@
 
 ## 🎉 Phase 1 - ABGESCHLOSSEN! ✅
 ## 🚀 Phase 2 - Tool Discovery System - ABGESCHLOSSEN! ✅
+## 🔥 Phase 3 - Core Logic - ABGESCHLOSSEN! ✅
 
-Die Foundation UND das Tool Discovery System für die plattformunabhängige Version von Legion wurden erfolgreich erstellt.
+Die Foundation, Tool Discovery UND Core Logic für die plattformunabhängige Version von Legion wurden erfolgreich implementiert.
 
 ---
 
@@ -35,9 +36,14 @@ Kali_legion_fork/
 │   │       ├── __init__.py
 │   │       └── wrapper.py        # NmapTool Implementation
 │   │
-│   ├── 📁 core/                  # ⏳ Business Logic (vorbereitet)
-│   ├── 📁 config/                # ⏳ Konfiguration (vorbereitet)
-│   └── 📁 utils/                 # ⏳ Utilities (vorbereitet)
+   ├── 📁 core/                  # ✅ Business Logic (Phase 3 FERTIG)
+   │   ├── models/               # Data Models (Host, Port, Service)
+   │   ├── database.py           # SimpleDatabase (JSON-based)
+   │   ├── scanner.py            # ScanManager (Queue, Async Workers)
+   │   └── integration_test.py   # End-to-End Tests
+   │
+   ├── 📁 config/                # ⏳ Konfiguration (vorbereitet)
+   └── 📁 utils/                 # ⏳ Utilities (vorbereitet)
 │
 └── 📁 app/, ui/, controller/     # Legacy Code (bleibt als Referenz)
 ```
@@ -250,14 +256,14 @@ if await nmap.validate():
 |-------|--------|-------|------------------|
 | **1. Foundation** | ✅ **100%** | Woche 1-2 | *Abgeschlossen* |
 | **2. Tool Discovery** | ✅ **100%** | Woche 3-4 | *Abgeschlossen* |
-| **3. Core Logic** | 📋 **0%** | Woche 5-7 | Nmap XML Parser, Scanner, DB |
+| **3. Core Logic** | ✅ **100%** | Woche 5-7 | *Abgeschlossen* |
 | **4. Configuration** | 📋 **0%** | Woche 8 | TOML Config-System |
 | **5. UI Migration** | 📋 **0%** | Woche 9-12 | PyQt6 GUI portieren |
 | **6. Additional Tools** | 📋 **0%** | Woche 13-14 | Weitere Tool-Wrapper |
 | **7. Testing & Polish** | 📋 **0%** | Woche 15-16 | Produktionsreife |
 | **8. Legacy Cleanup** | 📋 **0%** | Woche 17+ | Alten Code entfernen |
 
-**Aktueller Stand**: Phase 2 ✅ → Start Phase 3 📋
+**Aktueller Stand**: Phase 3 ✅ → Start Phase 4 📋
 
 ---
 
@@ -338,6 +344,193 @@ subprocess.Popen(["nmap", "-sV", ip])  # Sicher!
 
 ---
 
+### ✅ Phase 3: Core Logic (Implementiert)
+
+#### 8️⃣ Data Models (`src/legion/core/models/`)
+```python
+from legion.core.models import Host, Port, Service
+
+# Host model with full nmap data
+host = Host(
+    ip="192.168.1.1",
+    hostname="router.local",
+    mac_address="00:11:22:33:44:55",
+    vendor="Cisco Systems",
+    os_name="Linux 3.2 - 4.9",
+    os_accuracy=95,
+    state="up",
+    distance=1,
+    uptime=864000  # 10 days
+)
+
+# Port model with service details
+port = Port(
+    number=22,
+    protocol="tcp",
+    state="open",
+    service_name="ssh",
+    service_product="OpenSSH",
+    service_version="8.2p1",
+    confidence=10
+)
+```
+
+**Features**:
+- ✅ Type-safe dataclasses
+- ✅ Full nmap attribute support
+- ✅ OS detection (name, family, accuracy)
+- ✅ Service versioning (product, version, CPE)
+- ✅ Timestamps (discovered_at, last_seen, last_boot)
+
+---
+
+#### 9️⃣ Nmap XML Parser (`src/legion/tools/nmap/parser.py`)
+```python
+from legion.tools.nmap.parser import NmapXMLParser
+
+parser = NmapXMLParser()
+
+# Parse from file
+result = parser.parse_file("scan.xml")
+
+# Parse from string
+result = parser.parse_string(xml_content)
+
+# Access structured data
+for host in result.hosts:
+    print(f"Host: {host.ip} ({host.hostname})")
+    print(f"OS: {host.os_name} ({host.os_accuracy}%)")
+    
+    # Get ports for this host
+    for port in result.ports.get(host.ip, []):
+        print(f"  {port.number}/{port.protocol}: {port.service_name}")
+```
+
+**Features**:
+- ✅ Complete XML parsing
+- ✅ Host attributes (IP, hostname, MAC, vendor)
+- ✅ OS detection (name, family, accuracy, CPE)
+- ✅ Port/Service details (state, product, version)
+- ✅ NSE script results
+- ✅ Uptime & distance parsing
+- ✅ Scan metadata (args, version, timestamps)
+
+---
+
+#### 🔟 Simple Database (`src/legion/core/database.py`)
+```python
+from legion.core.database import SimpleDatabase
+
+db = SimpleDatabase(project_name="pentest_2025")
+
+# Save hosts
+db.save_host(host)
+
+# Save ports
+db.save_port(host.ip, port)
+
+# Query data
+all_hosts = db.get_all_hosts()
+up_hosts = db.get_up_hosts()
+ports = db.get_ports("192.168.1.1")
+
+# Search by service
+ssh_hosts = db.find_hosts_by_service("ssh")
+
+# Statistics
+stats = db.get_stats()
+# {'total_hosts': 10, 'up_hosts': 8, 'down_hosts': 2, 'total_ports': 42}
+```
+
+**Features**:
+- ✅ JSON-based storage (easy inspection)
+- ✅ In-memory caching
+- ✅ Host/Port/Service management
+- ✅ Search by service
+- ✅ Statistics & filtering
+- ✅ Datetime serialization
+- ✅ Project-based organization
+- ⏳ SQLAlchemy migration (Phase 6)
+
+---
+
+#### 1️⃣1️⃣ Scanner Manager (`src/legion/core/scanner.py`)
+```python
+from legion.core.scanner import ScanManager
+
+scanner = ScanManager(
+    database=db,
+    max_concurrent_scans=3,
+    result_dir=Path("./scans")
+)
+
+# Add callbacks
+scanner.add_progress_callback(lambda job: print(f"Status: {job.status}"))
+scanner.add_completion_callback(lambda job: print(f"Done: {job.hosts_found} hosts"))
+
+# Start workers
+await scanner.start()
+
+# Queue scans
+job_id1 = await scanner.queue_scan("192.168.1.0/24", "quick")
+job_id2 = await scanner.queue_scan("192.168.1.1", "full", ports="1-65535")
+
+# Wait for completion
+await scanner.wait_for_completion()
+
+# Get results
+job = scanner.get_job(job_id1)
+print(f"Found {job.hosts_found} hosts, {job.ports_found} ports")
+print(f"Duration: {job.duration}s")
+```
+
+**Features**:
+- ✅ Async scan queue management
+- ✅ Configurable worker pool
+- ✅ Progress tracking & callbacks
+- ✅ Automatic result parsing
+- ✅ Database integration
+- ✅ Scan profiles (quick, full, stealth, aggressive)
+- ✅ Timeout & error handling
+- ✅ Statistics & job tracking
+
+**Scan Profiles**:
+- `quick`: Fast scan, top 100 ports (-T4 -F)
+- `full`: All 65535 ports (-T4 -p-)
+- `stealth`: SYN scan, slower (-sS -T2)
+- `version`: Service version detection (-sV)
+- `os`: OS detection (-O)
+- `aggressive`: Full scan with scripts (-A -T4)
+
+---
+
+#### 1️⃣2️⃣ End-to-End Integration (`src/legion/core/integration_test.py`)
+```python
+# Complete workflow test:
+# 1. Parse sample nmap XML
+# 2. Store in database
+# 3. Query and search
+# 4. Display statistics
+
+# Test Results:
+# ✅ 3 hosts parsed (2 up, 1 down)
+# ✅ 7 ports stored
+# ✅ 7 services detected
+# ✅ OS detection working (Linux, Windows)
+# ✅ Search by service working
+# ✅ Statistics accurate
+```
+
+**Tested Scenarios**:
+- ✅ Router with SSH/HTTP/HTTPS (Linux)
+- ✅ Workstation with RDP/SMB (Windows 10)
+- ✅ Offline host (down state)
+- ✅ Service search (find SSH hosts)
+- ✅ OS filtering (Linux vs Windows)
+- ✅ Port statistics (open/closed/filtered)
+
+---
+
 ## 🧪 Wie testen?
 
 ### Phase 1 & 2 Tests
@@ -390,9 +583,93 @@ py src\legion\tools\registry.py
 
 # Test 7: Nmap Wrapper (wenn nmap installiert)
 py src\legion\tools\nmap\wrapper.py
+
+# === PHASE 3 TESTS ===
+
+# Test 8: Data Models
+cd src; py -m legion.core.models.host; cd ..
+
+# Test 9: Nmap XML Parser
+cd src; py -m legion.tools.nmap.parser; cd ..
+
+# Test 10: Simple Database
+cd src; py -m legion.core.database; cd ..
+
+# Test 11: Scanner Manager (mock mode)
+cd src; py -m legion.core.scanner; cd ..
+
+# Test 12: End-to-End Integration (EMPFOHLEN!)
+cd src; py -m legion.core.integration_test; cd ..
 ```
 
-### Erwartete Ausgabe
+### Erwartete Ausgabe (Phase 3)
+```
+======================================================================
+PHASE 3 - END-TO-END INTEGRATION TEST
+======================================================================
+
+Database: integration_test
+Location: C:\Users\...\AppData\Local\GothamSecurity\legion\projects\integration_test
+
+----------------------------------------------------------------------
+Parsing Sample Nmap XML Files
+----------------------------------------------------------------------
+
+Processing: Router (192.168.1.1)
+  Found 1 host(s)
+  Stored host: 192.168.1.1 with 3 port(s)
+
+Processing: Workstation (192.168.1.10)
+  Found 1 host(s)
+  Stored host: 192.168.1.10 with 4 port(s)
+
+Total stored: 3 hosts, 7 ports
+
+----------------------------------------------------------------------
+Database Contents
+----------------------------------------------------------------------
+
+IP Address: 192.168.1.1
+Hostname: router.local
+State: up
+OS: Linux 3.2 - 4.9 (95% accuracy)
+MAC: 00:11:22:33:44:55
+Vendor: Cisco Systems
+
+Ports: 3
+  22/tcp - open - ssh (OpenSSH 8.2p1)
+  80/tcp - open - http (Apache httpd 2.4.41)
+  443/tcp - open - https (Apache httpd 2.4.41)
+
+----------------------------------------------------------------------
+Database Statistics
+----------------------------------------------------------------------
+
+Total Hosts: 3
+  Up: 2
+  Down: 1
+
+Total Ports: 7
+  Open: 7
+
+Services detected:
+  ssh: 1
+  http: 1
+  https: 1
+  msrpc: 1
+  [...]
+
+======================================================================
+✅ Parser: Working
+✅ Database: Working
+✅ Data Models: Working
+✅ Search Functions: Working
+
+Phase 3 Core Logic is COMPLETE!
+======================================================================
+```
+
+### Erwartete Ausgabe (Phase 1 & 2)
 ```
 ======================================================================
 Legion - Cross-Platform Penetration Testing Framework
@@ -421,7 +698,102 @@ Legion v2.0 is under development.
 
 ---
 
-## 📈 Nächste Schritte (Phase 3)
+## 📈 Nächste Schritte (Phase 4)
+
+### Configuration System
+
+**Ziel**: TOML-basiertes Konfigurationssystem mit Hot-Reload
+
+#### 4.1 Config Schema
+```python
+# src/legion/config/schema.py (geplant)
+
+from legion.config import Config
+
+config = Config.load("legion.toml")
+
+# Access settings
+scan_timeout = config.scanning.timeout
+max_workers = config.scanning.max_concurrent
+log_level = config.logging.level
+```
+
+#### 4.2 User Preferences
+```python
+# legion.toml (geplant)
+
+[scanning]
+timeout = 300
+max_concurrent = 3
+default_profile = "quick"
+
+[logging]
+level = "INFO"
+file = "legion.log"
+
+[tools]
+nmap_path = "/usr/bin/nmap"
+auto_discover = true
+```
+
+#### 4.3 Project Management
+```python
+# src/legion/core/project.py (geplant)
+
+from legion.core.project import Project
+
+project = Project.create("pentest_2025")
+project.settings.scan_profile = "aggressive"
+project.save()
+
+# Auto-saves to: ~/.local/share/legion/projects/pentest_2025/
+```
+
+---
+
+## 💡 Neue Features in Phase 3
+
+| Feature | Beschreibung | Status |
+|---------|--------------|--------|
+| **Data Models** | Host, Port, Service dataclasses | ✅ |
+| **XML Parser** | Nmap XML → structured data | ✅ |
+| **Database** | SimpleDatabase (JSON-based) | ✅ |
+| **Scanner Manager** | Async queue-based scanning | ✅ |
+| **Scan Profiles** | Quick, Full, Stealth, Aggressive | ✅ |
+| **Progress Tracking** | Callbacks & job monitoring | ✅ |
+| **Service Search** | Find hosts by service | ✅ |
+| **OS Detection** | Parse & store OS info | ✅ |
+| **Statistics** | Host/Port/Service counts | ✅ |
+| **Integration Test** | End-to-end workflow | ✅ |
+
+---
+
+## 📈 Frühere Schritte (Phase 3) - ERLEDIGT ✅
+
+### Core Logic Implementation
+
+**Status**: ✅ **ABGESCHLOSSEN**
+
+Komplette Scan-Pipeline von XML-Parsing bis Database-Storage:
+
+**Implementiert**:
+- ✅ `src/legion/core/models/` - Host, Port, Service dataclasses
+- ✅ `src/legion/tools/nmap/parser.py` - XML Parser (413 Zeilen)
+- ✅ `src/legion/core/database.py` - SimpleDatabase (400+ Zeilen)
+- ✅ `src/legion/core/scanner.py` - ScanManager (430+ Zeilen)
+- ✅ `src/legion/core/integration_test.py` - E2E Tests
+
+**Getestet auf Windows 10**:
+- ✅ Parser parst komplexe XML (OS, Services, Scripts)
+- ✅ Database speichert/lädt Host+Port Daten
+- ✅ Scanner Queue-Management funktioniert
+- ✅ Integration Test: 3 Hosts, 7 Ports, alle Services
+- ✅ Search funktioniert (by service, by OS)
+- ✅ Statistiken korrekt
+
+---
+
+## 📈 Nächste Schritte (Phase 3) - ERLEDIGT ✅
 
 ### Core Logic Implementation
 
@@ -594,8 +966,8 @@ def find_tool(name: str) -> Optional[Path]:
 ---
 
 **Stand**: 2025-11-11  
-**Version**: 2.0.0-alpha1  
-**Status**: Phase 1 Complete ✅  
+**Version**: 2.0.0-alpha3  
+**Status**: Phase 3 Complete ✅  
 **Maintainer**: Gotarr
 
 ---

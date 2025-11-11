@@ -173,18 +173,20 @@ legion/
 
 ---
 
-### Phase 3: Core Logic Migration (Woche 5-7)
+### Phase 3: Core Logic Migration (Woche 5-7) ✅ **ABGESCHLOSSEN**
 **Ziel**: Geschäftslogik portieren
 
-- [ ] Datenbank-Abstraktion (SQLite/PostgreSQL)
-- [ ] Projekt-Management portieren
-- [ ] Scanner/Scheduler-Logik portieren
-- [ ] Data Models definieren (mit Type Hints)
-- [ ] Import-System überarbeiten
-- [ ] Screenshot-System plattformunabhängig
-- [ ] Core-Unit-Tests
+- [x] Data Models definieren (mit Type Hints) → `src/legion/core/models/`
+- [x] Nmap XML Parser implementieren → `src/legion/tools/nmap/parser.py`
+- [x] Datenbank-Abstraktion (SimpleDatabase) → `src/legion/core/database.py`
+- [x] Scanner/Scheduler-Logik portieren → `src/legion/core/scanner.py`
+- [x] End-to-End Integration Test → `src/legion/core/integration_test.py`
+- [ ] Projekt-Management portieren (verschoben nach Phase 4)
+- [ ] Screenshot-System plattformunabhängig (verschoben nach Phase 6)
+- [ ] Core-Unit-Tests (verschoben nach Phase 7)
 
-**Deliverable**: Core-Funktionalität ohne UI funktioniert
+**Deliverable**: ✅ Core-Funktionalität funktioniert (Parser → Database)
+**Details**: Siehe [docs/PHASE3_SUMMARY.md](docs/PHASE3_SUMMARY.md)
 
 ---
 

@@ -10,11 +10,13 @@ from typing import Any, Optional
 
 try:
     from legion.tools.base import BaseTool, ToolResult
+    from legion.tools.nmap.parser import NmapXMLParser, NmapScanResult
     from legion.tools.registry import get_registry
 except ImportError:
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
     from legion.tools.base import BaseTool, ToolResult
+    from legion.tools.nmap.parser import NmapXMLParser, NmapScanResult
     from legion.tools.registry import get_registry
 
 
@@ -71,7 +73,7 @@ class NmapTool(BaseTool):
             timeout: Optional timeout in seconds.
         
         Returns:
-            ToolResult with scan output.
+            ToolResult with scan output and optional XML path.
         
         Example:
             >>> result = await nmap.scan("192.168.1.0/24", ["-sV", "-T4"])
@@ -86,9 +88,15 @@ class NmapTool(BaseTool):
         scan_args.append(target)
         
         # Execute scan
-        return await self.run(scan_args, timeout=timeout)
+        result = await self.run(scan_args, timeout=timeout)
+        
+        # Store XML file path in result
+        if output_file and output_file.exists():
+            result.raw_output_path = output_file
+        
+        return result
     
-    async def parse_output(self, result: ToolResult) -> Any:
+    async def parse_output(self, result: ToolResult) -> NmapScanResult:
         """
         Parse nmap XML output.
         
@@ -96,19 +104,18 @@ class NmapTool(BaseTool):
             result: ToolResult from nmap execution.
         
         Returns:
-            Parsed scan data (placeholder for now).
+            NmapScanResult with parsed scan data.
         
-        Note:
-            Full XML parsing will be implemented in Phase 3.
-            For now, this is a placeholder.
+        Raises:
+            ValueError: If XML output file not found or invalid.
         """
-        # TODO: Implement XML parsing in Phase 3
-        # Will parse nmap XML output into structured Host/Port objects
-        return {
-            "raw_output": result.stdout,
-            "parsed": False,
-            "note": "XML parsing not yet implemented - coming in Phase 3",
-        }
+        # Check if we have XML output file
+        if not result.raw_output_path:
+            raise ValueError("No XML output file available. Use output_file parameter in scan().")
+        
+        # Parse the XML file
+        parser = NmapXMLParser()
+        return parser.parse_file(result.raw_output_path)
     
     def _extract_version(self, version_output: str) -> str:
         """
