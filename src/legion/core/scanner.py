@@ -195,8 +195,10 @@ class ScanManager:
                 self.database.save_host(host)
                 job.hosts_found += 1
                 
-                for port in host.ports:
-                    self.database.save_port(host.ip_address, port)
+                # Get ports for this host from the ports dict
+                host_ports = result.ports.get(host.ip, [])
+                for port in host_ports:
+                    self.database.save_port(host.ip, port)
                     job.ports_found += 1
             
             job.result_file = xml_path
@@ -225,8 +227,8 @@ class ScanManager:
                 args = self._build_scan_args(job.scan_type, job.target, job.options)
                 args.extend(["-oX", str(output_file)])
                 
-                # Execute scan
-                result = await self._nmap.run(*args)
+                # Execute scan (args as list, not *args)
+                result = await self._nmap.run(args)
                 
                 if not result.success:
                     raise RuntimeError(f"Scan failed: {result.stderr}")

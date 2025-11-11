@@ -4,10 +4,19 @@ Configuration manager for Legion.
 Handles loading, saving, and managing TOML-based configuration files.
 """
 
+from typing import TYPE_CHECKING
+
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:
     import tomli as tomllib  # Backport for Python 3.10
+
+# Type checking: suppress warning for tomllib on Python 3.10
+if TYPE_CHECKING:
+    try:
+        import tomllib  # type: ignore
+    except ImportError:
+        import tomli as tomllib  # type: ignore
 
 import tomli_w  # For writing TOML
 from pathlib import Path

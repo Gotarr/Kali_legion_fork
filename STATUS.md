@@ -261,12 +261,12 @@ if await nmap.validate():
 | **2. Tool Discovery** | ✅ **100%** | Woche 3-4 | *Abgeschlossen* |
 | **3. Core Logic** | ✅ **100%** | Woche 5-7 | *Abgeschlossen* |
 | **4. Configuration** | ✅ **100%** | Woche 8 | *Abgeschlossen* |
-| **5. UI Migration** | 📋 **0%** | Woche 9-12 | PyQt6 GUI portieren |
+| **5. UI Migration** | � **33%** | Woche 9-12 | PyQt6 GUI portieren |
 | **6. Additional Tools** | 📋 **0%** | Woche 13-14 | Weitere Tool-Wrapper |
 | **7. Testing & Polish** | 📋 **0%** | Woche 15-16 | Produktionsreife |
 | **8. Legacy Cleanup** | 📋 **0%** | Woche 17+ | Alten Code entfernen |
 
-**Aktueller Stand**: Phase 4 ✅ → Start Phase 5 📋
+**Aktueller Stand**: Phase 5 (2/6 Tasks) �
 
 ---
 
@@ -1168,9 +1168,9 @@ def find_tool(name: str) -> Optional[Path]:
 
 ---
 
-**Stand**: 2025-11-11  
-**Version**: 2.0.0-alpha3  
-**Status**: Phase 3 Complete ✅  
+**Stand**: 2025-01-15  
+**Version**: 2.0.0-alpha5  
+**Status**: Phase 5 (Task 2/6) 🔄  
 **Maintainer**: Gotarr
 
 ---
@@ -1178,5 +1178,54 @@ def find_tool(name: str) -> Optional[Path]:
 ## 🎯 Vision
 
 **Endziel**: Ein vollständig plattformunabhängiges, modernes Pentesting-Framework in Pure Python, das auf Windows und Linux gleichermaßen läuft - ohne Bash-Scripts, mit voller Type-Safety und erstklassiger Developer Experience.
+
+---
+
+## Phase 5: UI Migration - Tasks
+
+### Task 1: UI Architecture Setup ✅
+- ✅ Modern MainWindow base class
+- ✅ Menu bar, toolbar, statusbar structure  
+- ✅ Config integration (theme, UI settings)
+- ✅ Basic layout with placeholders
+
+### Task 2: Database Bridge & Models ✅
+- ✅ HostsTableModel with QAbstractTableModel
+- ✅ PortsTableModel with master-detail pattern
+- ✅ Color-coding by state (green/red)
+- ✅ Tooltips and data roles
+- ✅ Selection handling (host → ports update)
+- ✅ Auto-refresh mechanism
+- ✅ Integration testing with sample data
+
+### Task 3: Scanner Integration 📋
+- 📋 "New Scan" dialog
+- 📋 Progress callbacks → UI updates
+- 📋 Scan completion → refresh tables
+- 📋 Queue management UI
+
+### Task 4: Config Dialog 📋
+- 📋 Settings dialog with TOML editor
+- 📋 Theme switcher (light/dark/system)
+- 📋 Tool path configuration
+- 📋 Apply changes → save config
+
+### Task 5: Main Window Migration 📋
+- 📋 Port remaining legacy UI elements
+- 📋 Migrate dialogs (Add Host, Help, etc.)
+- 📋 Event handler updates
+- 📋 Theme stylesheet application
+
+### Task 6: Testing & Polish 📋
+- 📋 UI integration tests
+- 📋 Theme testing
+- 📋 Performance optimization
+- 📋 Bug fixes
+
+**Phase 5 Files**:
+- `src/legion/ui/mainwindow.py` (450+ lines)
+- `src/legion/ui/models.py` (430+ lines)
+- `test_mainwindow.py` (test harness)
+- `docs/PHASE5_TASK2_SUMMARY.md`
 
 **Wir sind auf dem besten Weg! 🚀**
