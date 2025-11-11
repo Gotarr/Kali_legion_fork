@@ -1,0 +1,180 @@
+# Legion Configuration Template
+# ============================
+# 
+# This is the default configuration file for Legion.
+# Copy this to your user config directory and customize as needed.
+#
+# Windows: %APPDATA%\legion\legion.toml
+# Linux: ~/.config/legion/legion.toml
+#
+
+# ============================================================
+# SCANNING CONFIGURATION
+# ============================================================
+[scanning]
+
+# Scan timeout in seconds (default: 300 = 5 minutes)
+timeout = 300
+
+# Maximum number of concurrent scans (default: 3)
+max_concurrent = 3
+
+# Default scan profile
+# Options: "quick", "full", "stealth", "version", "os", "aggressive"
+default_profile = "quick"
+
+# Automatically parse scan results after completion
+auto_parse = true
+
+# Automatically save parsed results to database
+auto_save = true
+
+# Nmap timing template (0=paranoid, 5=insane)
+# 0: Paranoid (-T0) - Very slow, evades IDS
+# 1: Sneaky (-T1) - Slow, evades most IDS
+# 2: Polite (-T2) - Slower than normal, less bandwidth
+# 3: Normal (-T3) - Default nmap timing
+# 4: Aggressive (-T4) - Faster, assumes good network
+# 5: Insane (-T5) - Very fast, may miss results
+timing_template = 4
+
+# Enable verbose scan output for debugging
+verbose_output = false
+
+
+# ============================================================
+# LOGGING CONFIGURATION
+# ============================================================
+[logging]
+
+# Logging level: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+level = "INFO"
+
+# Enable logging to file
+file_enabled = true
+
+# Custom log file path (leave empty for default)
+# file_path = "/custom/path/to/legion.log"
+
+# Enable console logging (output to terminal)
+console_enabled = true
+
+# Log message format
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Maximum log file size in MB (rotates when exceeded)
+max_file_size_mb = 10
+
+# Number of backup log files to keep
+backup_count = 5
+
+
+# ============================================================
+# TOOLS CONFIGURATION
+# ============================================================
+[tools]
+
+# Automatically discover tool paths on startup
+auto_discover = true
+
+# Custom tool paths (optional)
+# Uncomment and set paths if tools are not in PATH
+# nmap_path = "/usr/bin/nmap"
+# hydra_path = "/usr/bin/hydra"
+# nikto_path = "/usr/bin/nikto"
+# searchsploit_path = "/usr/bin/searchsploit"
+
+# Additional custom tool paths
+[tools.custom_paths]
+# my_tool = "/path/to/my/tool"
+
+# Enable tool path caching (faster startup)
+cache_enabled = true
+
+# Cache time-to-live in seconds (3600 = 1 hour)
+cache_ttl = 3600
+
+
+# ============================================================
+# USER INTERFACE CONFIGURATION
+# ============================================================
+[ui]
+
+# UI theme: "light", "dark", "system" (follows OS theme)
+theme = "system"
+
+# Base font size in points (6-24)
+font_size = 10
+
+# Show main toolbar
+show_toolbar = true
+
+# Show status bar
+show_statusbar = true
+
+# Remember window size and position between sessions
+remember_window_size = true
+
+# Auto-refresh interval in seconds (0 = disabled)
+auto_refresh_interval = 5
+
+# Maximum rows to display in tables (for performance)
+max_table_rows = 1000
+
+# Confirm before deleting items (hosts, scans, etc.)
+confirm_deletions = true
+
+
+# ============================================================
+# DATABASE CONFIGURATION
+# ============================================================
+[database]
+
+# Database type: "json" (simple) or "sqlite" (advanced)
+type = "json"
+
+# Custom database path (leave empty for default)
+# Windows default: %APPDATA%\legion\projects\
+# Linux default: ~/.local/share/legion/projects/
+# path = "/custom/path/to/database"
+
+# Automatically backup database
+auto_backup = true
+
+# Backup interval in seconds (300 = 5 minutes)
+backup_interval = 300
+
+# Compress database files (SQLite only)
+compression = false
+
+
+# ============================================================
+# PROJECT CONFIGURATION
+# ============================================================
+[project]
+
+# Default project name
+name = "default"
+
+# Project description
+description = ""
+
+# Project creation timestamp (auto-generated)
+# created_at = "2025-01-21T10:00:00"
+
+# Default scan profile for this project
+scan_profile = "quick"
+
+# Auto-save interval in seconds (60 = 1 minute)
+auto_save_interval = 60
+
+
+# ============================================================
+# ADVANCED SETTINGS
+# ============================================================
+# Uncomment these sections only if you need advanced customization
+
+# [advanced]
+# max_threads = 10
+# timeout_multiplier = 1.5
+# retry_attempts = 3

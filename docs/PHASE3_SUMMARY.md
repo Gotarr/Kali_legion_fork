@@ -260,7 +260,6 @@ class SimpleDatabase:
 **Speicherort**:
 - Windows: `%LOCALAPPDATA%\GothamSecurity\legion\projects\{project_name}\`
 - Linux: `~/.local/share/legion/projects/{project_name}/`
-- macOS: `~/Library/Application Support/legion/projects/{project_name}/`
 
 **Dateien**:
 - `hosts.json` - Host-Daten

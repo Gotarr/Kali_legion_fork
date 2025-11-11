@@ -16,7 +16,7 @@ class PlatformInfo:
     """Information about the current platform."""
     
     system: Literal["Windows", "Linux", "Darwin", "Unknown"]
-    """Operating system name."""
+    """Operating system name (Darwin support deprecated)."""
     
     version: str
     """OS version string."""
@@ -57,13 +57,13 @@ class PlatformInfo:
     
     @property
     def is_macos(self) -> bool:
-        """Check if running on macOS."""
+        """Check if running on macOS (DEPRECATED - Not officially supported)."""
         return self.system == "Darwin"
     
     @property
     def is_unix_like(self) -> bool:
-        """Check if running on Unix-like system (Linux or macOS)."""
-        return self.is_linux or self.is_macos
+        """Check if running on Unix-like system (Linux only - macOS deprecated)."""
+        return self.is_linux
 
 
 def _detect_wsl() -> bool:
@@ -126,6 +126,16 @@ def detect_platform() -> PlatformInfo:
     if system not in ("Windows", "Linux", "Darwin"):
         system = "Unknown"
     
+    # Warn if macOS detected
+    if system == "Darwin":
+        import warnings
+        warnings.warn(
+            "macOS is not officially supported. Legion is designed for Windows and Linux. "
+            "Some features may not work correctly.",
+            UserWarning,
+            stacklevel=2
+        )
+    
     # Detect WSL
     is_wsl = False
     if system == "Linux":
@@ -158,7 +168,7 @@ def get_platform_name() -> str:
     Get a simple platform name string.
     
     Returns:
-        'windows', 'linux', 'macos', or 'unknown'
+        'windows', 'linux', or 'unknown' (macOS returns 'unknown' as unsupported)
     """
     info = detect_platform()
     if info.is_windows:
@@ -166,7 +176,7 @@ def get_platform_name() -> str:
     elif info.is_linux:
         return "linux"
     elif info.is_macos:
-        return "macos"
+        return "unknown"  # macOS not officially supported
     else:
         return "unknown"
 

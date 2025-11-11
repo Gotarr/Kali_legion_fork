@@ -1,8 +1,8 @@
 # Legion Cross-Platform Migration Plan
 
-**Ziel**: Legion vollständig plattformunabhängig machen (Windows, Linux, macOS)
+**Ziel**: Legion vollständig plattformunabhängig machen (Windows & Linux)
 
-**Status**: Planning Phase  
+**Status**: Phase 3 Complete  
 **Startdatum**: 2025-11-11  
 **Verantwortlich**: Gotarr
 
@@ -10,7 +10,7 @@
 
 ## 📋 Übersicht
 
-Legion wird von einem Linux-spezifischen Tool zu einer vollständig plattformunabhängigen Pentesting-Suite umgebaut. Die Migration erfolgt schrittweise, wobei der bestehende Code als Referenz erhalten bleibt.
+Legion wird von einem Linux-spezifischen Tool zu einer vollständig plattformunabhängigen Pentesting-Suite (Windows & Linux) umgebaut. Die Migration erfolgt schrittweise, wobei der bestehende Code als Referenz erhalten bleibt.
 
 ---
 
@@ -30,12 +30,11 @@ Legion wird von einem Linux-spezifischen Tool zu einer vollständig plattformuna
    
 3. ✅ **Intelligente Tool-Nutzung**: OS-spezifische Third-Party Tools
    - **Windows**: nmap.exe, hydra.exe, etc. (portable oder installiert)
-   - **Linux**: Native Tools aus Paket-Manager
-   - **macOS**: Homebrew-basierte Tools
+   - **Linux**: Native Tools aus Paket-Manager (apt, yum, pacman)
    - Fallback: Python-Bibliotheken (python-nmap, etc.)
 
 ### Weitere Ziele
-4. ✅ **Betriebssystem-Unabhängigkeit**: Windows, Linux, macOS Support
+4. ✅ **Betriebssystem-Unabhängigkeit**: Windows & Linux Support
 5. ✅ **Tool-Abstraktion**: Einheitliche APIs für externe Tools
 6. ✅ **Bessere Testbarkeit**: Unit Tests, Integration Tests, CI/CD
 7. ✅ **Verbesserte UX**: Plattformgerechte Installation & Konfiguration

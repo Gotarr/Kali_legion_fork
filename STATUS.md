@@ -3,8 +3,9 @@
 ## 🎉 Phase 1 - ABGESCHLOSSEN! ✅
 ## 🚀 Phase 2 - Tool Discovery System - ABGESCHLOSSEN! ✅
 ## 🔥 Phase 3 - Core Logic - ABGESCHLOSSEN! ✅
+## ⚙️ Phase 4 - Configuration System - ABGESCHLOSSEN! ✅
 
-Die Foundation, Tool Discovery UND Core Logic für die plattformunabhängige Version von Legion wurden erfolgreich implementiert.
+Die Foundation, Tool Discovery, Core Logic UND Configuration System für die plattformunabhängige Version von Legion wurden erfolgreich implementiert.
 
 ---
 
@@ -42,7 +43,14 @@ Kali_legion_fork/
    │   ├── scanner.py            # ScanManager (Queue, Async Workers)
    │   └── integration_test.py   # End-to-End Tests
    │
-   ├── 📁 config/                # ⏳ Konfiguration (vorbereitet)
+   ├── 📁 config/                # ✅ Configuration System (Phase 4 FERTIG)
+   │   ├── schema.py             # Config Dataclasses (TOML)
+   │   ├── manager.py            # ConfigManager (load/save)
+   │   ├── defaults.py           # Default Settings
+   │   ├── init.py               # User Config Init + Migration
+   │   ├── template.toml         # Config Template
+   │   └── config_test.py        # Integration Tests (5/5 passed)
+   │
    └── 📁 utils/                 # ⏳ Utilities (vorbereitet)
 │
 └── 📁 app/, ui/, controller/     # Legacy Code (bleibt als Referenz)
@@ -64,16 +72,14 @@ print(info)  # Windows 10 on x86_64 - Python 3.11.0
 # Properties:
 info.is_windows    # True/False
 info.is_linux      # True/False  
-info.is_macos      # True/False
 info.is_wsl        # Windows Subsystem for Linux?
 info.is_admin      # Running with privileges?
 ```
 
 **Funktioniert auf**:
 - ✅ Windows 10/11
-- ✅ Linux (Ubuntu, Kali, Fedora, etc.)
+- ✅ Linux (Ubuntu, Kali, Fedora, Debian, Arch, etc.)
 - ✅ WSL (Windows Subsystem for Linux)
-- ✅ macOS (nicht getestet, aber code-ready)
 
 ---
 
@@ -91,7 +97,6 @@ from legion.platform.paths import (
 data = get_data_dir()
 # Windows: C:\Users\User\AppData\Local\GothamSecurity\legion
 # Linux:   ~/.local/share/legion
-# macOS:   ~/Library/Application Support/legion
 ```
 
 **Features**:
@@ -123,7 +128,7 @@ if check_raw_socket_capability():
 
 **Features**:
 - ✅ Windows: UAC Elevation
-- ✅ Linux/Mac: sudo Instructions
+- ✅ Linux: sudo Instructions
 - ✅ Raw Socket Detection
 - ✅ Detaillierter Privilege-Status
 
@@ -168,7 +173,6 @@ from legion.tools.discovery import find_tool, discover_all_tools
 nmap_path = find_tool("nmap")
 # Windows: C:\Program Files\Nmap\nmap.exe
 # Linux:   /usr/bin/nmap
-# macOS:   /usr/local/bin/nmap
 
 # Discover all common tools
 tools = discover_all_tools()
@@ -181,8 +185,7 @@ for name, path in tools.items():
 2. ✅ System PATH (shutil.which)
 3. ✅ Common Locations (OS-spezifisch)
    - **Windows**: Program Files, C:\Tools
-   - **Linux**: /usr/bin, /usr/local/bin, /opt
-   - **macOS**: Homebrew, MacPorts
+   - **Linux**: /usr/bin, /usr/local/bin, /opt, Kali-spezifisch
 4. ✅ Windows Registry (nur Windows)
 
 **Features**:
@@ -257,13 +260,13 @@ if await nmap.validate():
 | **1. Foundation** | ✅ **100%** | Woche 1-2 | *Abgeschlossen* |
 | **2. Tool Discovery** | ✅ **100%** | Woche 3-4 | *Abgeschlossen* |
 | **3. Core Logic** | ✅ **100%** | Woche 5-7 | *Abgeschlossen* |
-| **4. Configuration** | 📋 **0%** | Woche 8 | TOML Config-System |
+| **4. Configuration** | ✅ **100%** | Woche 8 | *Abgeschlossen* |
 | **5. UI Migration** | 📋 **0%** | Woche 9-12 | PyQt6 GUI portieren |
 | **6. Additional Tools** | 📋 **0%** | Woche 13-14 | Weitere Tool-Wrapper |
 | **7. Testing & Polish** | 📋 **0%** | Woche 15-16 | Produktionsreife |
 | **8. Legacy Cleanup** | 📋 **0%** | Woche 17+ | Alten Code entfernen |
 
-**Aktueller Stand**: Phase 3 ✅ → Start Phase 4 📋
+**Aktueller Stand**: Phase 4 ✅ → Start Phase 5 📋
 
 ---
 
@@ -282,6 +285,8 @@ SQLAlchemy         # Database (async support)
 platformdirs       # OS-spezifische Pfade
 psutil             # Prozess-Management
 pathlib            # Moderne Pfad-Operationen (stdlib)
+tomli              # TOML parser (Python 3.10, stdlib in 3.11+)
+tomli-w            # TOML writer
 
 # Development
 pytest             # Testing
@@ -315,7 +320,7 @@ def detect_platform() -> PlatformInfo:
 
 @dataclass
 class PlatformInfo:
-    system: Literal["Windows", "Linux", "Darwin"]
+    system: Literal["Windows", "Linux"]
     version: str
     is_admin: bool
 ```
@@ -528,6 +533,204 @@ print(f"Duration: {job.duration}s")
 - ✅ Service search (find SSH hosts)
 - ✅ OS filtering (Linux vs Windows)
 - ✅ Port statistics (open/closed/filtered)
+
+---
+
+### ✅ Phase 4: Configuration System (Implementiert)
+
+#### 1️⃣3️⃣ Config Schema (`src/legion/config/schema.py`)
+```python
+from legion.config import LegionConfig, get_default_config
+
+# Get default configuration
+config = get_default_config()
+
+# Access settings
+print(f"Scan Timeout: {config.scanning.timeout}s")
+print(f"Max Concurrent: {config.scanning.max_concurrent}")
+print(f"Log Level: {config.logging.level}")
+print(f"UI Theme: {config.ui.theme}")
+
+# Modify settings
+config.scanning.timeout = 600
+config.logging.level = "DEBUG"
+config.ui.theme = "dark"
+
+# Validate
+config.validate()  # Raises ValueError if invalid
+```
+
+**Config Sections**:
+- ✅ **Scanning**: timeout, max_concurrent, profiles, timing
+- ✅ **Logging**: level, file/console, rotation
+- ✅ **Tools**: auto-discovery, custom paths, caching
+- ✅ **UI**: theme, font size, auto-refresh
+- ✅ **Database**: type (json/sqlite), backup
+- ✅ **Project**: name, description, scan profile
+
+---
+
+#### 1️⃣4️⃣ Config Manager (`src/legion/config/manager.py`)
+```python
+from legion.config import ConfigManager, get_config
+
+# Load config (auto-creates if not exists)
+config = get_config()
+
+# Or use manager directly
+manager = ConfigManager()
+config = manager.load()
+
+# Update via manager
+manager.update(
+    scanning__timeout=900,
+    logging__level="INFO",
+    ui__theme="dark"
+)
+
+# Save changes
+manager.save()
+
+# Reset to defaults
+manager.reset()
+```
+
+**Features**:
+- ✅ TOML-based (human-readable)
+- ✅ Automatic file creation
+- ✅ Type-safe loading/saving
+- ✅ Batch updates
+- ✅ Global singleton instance
+- ✅ None-value filtering (TOML compatible)
+
+**Config Locations**:
+- Windows: `%APPDATA%\legion\legion.toml`
+- Linux: `~/.config/legion/legion.toml`
+
+---
+
+#### 1️⃣5️⃣ Legacy Migration (`src/legion/config/init.py`)
+```python
+from legion.config import init_user_config, find_legacy_config
+
+# Initialize config (auto-migrates from legion.conf if found)
+manager = init_user_config()
+
+# Find legacy config
+legacy = find_legacy_config()
+if legacy:
+    print(f"Found legacy config: {legacy}")
+    # Automatic backup + migration to TOML
+
+# Reset to factory defaults
+from legion.config import reset_user_config
+manager = reset_user_config()  # Creates backup first
+```
+
+**Migration Features**:
+- ✅ Finds old `legion.conf` (INI format)
+- ✅ Automatic backup (`legion.conf.backup`)
+- ✅ Maps legacy settings to new structure
+- ✅ Validates migrated config
+- ✅ Saves as TOML
+
+**Migrated Settings**:
+- `max-fast-processes` → `scanning.max_concurrent`
+- `screenshooter-timeout` → `scanning.timeout`
+- `hydra-path` → `tools.hydra_path`
+- (More mappings as needed)
+
+---
+
+#### 1️⃣6️⃣ Config Template (`src/legion/config/template.toml`)
+```toml
+# Legion Configuration Template
+# ============================
+
+[scanning]
+# Scan timeout in seconds (default: 300 = 5 minutes)
+timeout = 300
+
+# Maximum number of concurrent scans (default: 3)
+max_concurrent = 3
+
+# Default scan profile
+# Options: "quick", "full", "stealth", "version", "os", "aggressive"
+default_profile = "quick"
+
+# Nmap timing template (0=paranoid, 5=insane)
+timing_template = 4
+
+[logging]
+# Logging level: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+level = "INFO"
+
+# Enable logging to file
+file_enabled = true
+
+# Maximum log file size in MB
+max_file_size_mb = 10
+
+[tools]
+# Automatically discover tool paths
+auto_discover = true
+
+# Custom tool paths (optional)
+# nmap_path = "/usr/bin/nmap"
+# hydra_path = "/usr/bin/hydra"
+
+[ui]
+# UI theme: "light", "dark", "system"
+theme = "system"
+
+# Base font size (6-24)
+font_size = 10
+
+[database]
+# Database type: "json" or "sqlite"
+type = "json"
+
+# Auto-backup enabled
+auto_backup = true
+
+[project]
+# Default project name
+name = "default"
+```
+
+**Features**:
+- ✅ 180 lines of documentation
+- ✅ All options explained
+- ✅ Platform-specific hints
+- ✅ Examples for custom paths
+- ✅ Ready to copy & customize
+
+---
+
+#### 1️⃣7️⃣ Integration Tests (`src/legion/config/config_test.py`)
+```python
+# Run all tests:
+python src/legion/config/config_test.py
+
+# Test Results:
+# ✅ Schema Validation (3 sub-tests)
+# ✅ Config Manager (4 sub-tests)
+# ✅ Template Creation (3 sub-tests)
+# ✅ Legacy Migration (verified)
+# ✅ Full Workflow (5 steps)
+#
+# Results: 5/5 tests passed
+```
+
+**Test Coverage**:
+- ✅ Default config validation
+- ✅ Invalid value detection
+- ✅ TOML save/load cycle
+- ✅ Manager update method
+- ✅ Config persistence
+- ✅ Template generation
+- ✅ Legacy migration accuracy
+- ✅ Complete workflow end-to-end
 
 ---
 
@@ -898,7 +1101,7 @@ Automatisches Finden von Tools auf allen Betriebssystemen implementiert:
 
 | Aspekt | Alt (Legacy) | Neu (v2.0) |
 |--------|-------------|------------|
-| **Plattform** | Nur Linux | Windows, Linux, macOS |
+| **Plattform** | Nur Linux | Windows & Linux |
 | **Shell-Scripts** | Viele .sh Files | Pure Python |
 | **Type Safety** | Minimal | 100% Type Hints |
 | **Testing** | Schwierig | Dependency Injection |
@@ -974,6 +1177,6 @@ def find_tool(name: str) -> Optional[Path]:
 
 ## 🎯 Vision
 
-**Endziel**: Ein vollständig plattformunabhängiges, modernes Pentesting-Framework in Pure Python, das auf Windows, Linux und macOS gleichermaßen läuft - ohne Bash-Scripts, mit voller Type-Safety und erstklassiger Developer Experience.
+**Endziel**: Ein vollständig plattformunabhängiges, modernes Pentesting-Framework in Pure Python, das auf Windows und Linux gleichermaßen läuft - ohne Bash-Scripts, mit voller Type-Safety und erstklassiger Developer Experience.
 
 **Wir sind auf dem besten Weg! 🚀**
