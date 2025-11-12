@@ -128,4 +128,17 @@ docker/cleanupExited.sh
 log/*.log
 fixname.sh
 ghostdriver.log
+
+# Legion v2.0 - Phase 1-5 artifacts
+scan_results/
+log/
+backup/
+*.db
+*.sqlite
+*.sqlite3
 huge_nmap.xml
+
+# Temporary test databases
+tests/**/*.db
+tests/**/*.sqlite
+tests/**/*.json

@@ -10,6 +10,7 @@ Date: 2025-11-11
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -22,6 +23,8 @@ from legion.tools.nmap.parser import NmapXMLParser
 from legion.core.database import SimpleDatabase
 from legion.core.models.host import Host
 from legion.core.models.port import Port
+
+logger = logging.getLogger(__name__)
 
 
 class ScanStatus(Enum):
@@ -126,11 +129,12 @@ class ScanManager:
     
     def _notify_completion(self, job: ScanJob) -> None:
         """Notify all completion callbacks."""
+        logger.debug(f"Notifying {len(self._completion_callbacks)} completion callbacks for job {job.id}")
         for callback in self._completion_callbacks:
             try:
                 callback(job)
             except Exception as e:
-                print(f"Error in completion callback: {e}")
+                logger.error(f"Error in completion callback: {e}")
     
     async def queue_scan(
         self,
@@ -246,6 +250,7 @@ class ScanManager:
                 job.error = str(e)
             
             finally:
+                logger.info(f"Scan finished: {job.id} - {job.status.value}")
                 self._notify_progress(job)
                 self._notify_completion(job)
     

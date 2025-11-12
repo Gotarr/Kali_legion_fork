@@ -1,0 +1,1276 @@
+﻿# Legion v2.0 - Cross-Platform Migration - Ãœbersicht
+
+## ðŸŽ‰ Phase 1 - ABGESCHLOSSEN! âœ…
+## ðŸš€ Phase 2 - Tool Discovery System - ABGESCHLOSSEN! âœ…
+## ðŸ”¥ Phase 3 - Core Logic - ABGESCHLOSSEN! âœ…
+## âš™ï¸ Phase 4 - Configuration System - ABGESCHLOSSEN! âœ…
+
+Die Foundation, Tool Discovery, Core Logic UND Configuration System fÃ¼r die plattformunabhÃ¤ngige Version von Legion wurden erfolgreich implementiert.
+
+---
+
+## ðŸ“Š Was wurde erreicht
+
+### âœ… Neue Projekt-Struktur
+```
+Kali_legion_fork/
+â”‚
+â”œâ”€â”€ ðŸ“„ MIGRATION_PLAN.md          # 8-Phasen Migrations-Roadmap
+â”œâ”€â”€ ðŸ“„ ARCHITECTURE.md            # Technische Architektur
+â”œâ”€â”€ ðŸ“„ SETUP_GUIDE.md             # Installation & Test-Anleitung
+â”œâ”€â”€ ðŸ“„ pyproject.toml             # Modernes Build-System
+â”‚
+â”œâ”€â”€ ðŸ“ src/legion/                # NEUE plattformunabhÃ¤ngige Implementation
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”œâ”€â”€ __main__.py               # Entry Point: python -m legion
+â”‚   â”‚
+â”‚   â”œâ”€â”€ ðŸ“ platform/              # âœ… OS-Abstraktionsschicht (Phase 1 FERTIG)
+â”‚   â”‚   â”œâ”€â”€ detector.py           # Platform-Erkennung
+â”‚   â”‚   â”œâ”€â”€ paths.py              # Cross-Platform Pfade
+â”‚   â”‚   â””â”€â”€ privileges.py         # Admin/Root Handling
+â”‚   â”‚
+â”‚   â”œâ”€â”€ ðŸ“ tools/                 # âœ… Tool Discovery & Base (Phase 2 FERTIG)
+â”‚   â”‚   â”œâ”€â”€ base.py               # BaseTool Klasse + ToolResult/ToolInfo
+â”‚   â”‚   â”œâ”€â”€ discovery.py          # Tool Discovery (PATH, Registry, common dirs)
+â”‚   â”‚   â”œâ”€â”€ registry.py           # Tool Registry mit Caching
+â”‚   â”‚   â””â”€â”€ nmap/                 # Nmap Wrapper (Beispiel)
+â”‚   â”‚       â”œâ”€â”€ __init__.py
+â”‚   â”‚       â””â”€â”€ wrapper.py        # NmapTool Implementation
+â”‚   â”‚
+   â”œâ”€â”€ ðŸ“ core/                  # âœ… Business Logic (Phase 3 FERTIG)
+   â”‚   â”œâ”€â”€ models/               # Data Models (Host, Port, Service)
+   â”‚   â”œâ”€â”€ database.py           # SimpleDatabase (JSON-based)
+   â”‚   â”œâ”€â”€ scanner.py            # ScanManager (Queue, Async Workers)
+   â”‚   â””â”€â”€ integration_test.py   # End-to-End Tests
+   â”‚
+   â”œâ”€â”€ ðŸ“ config/                # âœ… Configuration System (Phase 4 FERTIG)
+   â”‚   â”œâ”€â”€ schema.py             # Config Dataclasses (TOML)
+   â”‚   â”œâ”€â”€ manager.py            # ConfigManager (load/save)
+   â”‚   â”œâ”€â”€ defaults.py           # Default Settings
+   â”‚   â”œâ”€â”€ init.py               # User Config Init + Migration
+   â”‚   â”œâ”€â”€ template.toml         # Config Template
+   â”‚   â””â”€â”€ config_test.py        # Integration Tests (5/5 passed)
+   â”‚
+   â””â”€â”€ ðŸ“ utils/                 # â³ Utilities (vorbereitet)
+â”‚
+â””â”€â”€ ðŸ“ app/, ui/, controller/     # Legacy Code (bleibt als Referenz)
+```
+
+---
+
+## ðŸš€ Kern-Features
+
+### âœ… Phase 1: Platform Foundation (Implementiert)
+
+#### 1ï¸âƒ£ Platform Detection (`src/legion/platform/detector.py`)
+```python
+from legion.platform import detect_platform
+
+info = detect_platform()
+print(info)  # Windows 10 on x86_64 - Python 3.11.0
+
+# Properties:
+info.is_windows    # True/False
+info.is_linux      # True/False  
+info.is_wsl        # Windows Subsystem for Linux?
+info.is_admin      # Running with privileges?
+```
+
+**Funktioniert auf**:
+- âœ… Windows 10/11
+- âœ… Linux (Ubuntu, Kali, Fedora, Debian, Arch, etc.)
+- âœ… WSL (Windows Subsystem for Linux)
+
+---
+
+### 2ï¸âƒ£ Path Management (`src/legion/platform/paths.py`)
+```python
+from legion.platform.paths import (
+    get_data_dir,
+    get_config_dir,
+    get_log_dir,
+    get_temp_dir,
+    get_projects_dir,
+)
+
+# OS-spezifische Pfade automatisch:
+data = get_data_dir()
+# Windows: C:\Users\User\AppData\Local\GothamSecurity\legion
+# Linux:   ~/.local/share/legion
+```
+
+**Features**:
+- âœ… Automatische Verzeichnis-Erstellung
+- âœ… Path Traversal Protection
+- âœ… Plattformgerechte Locations
+- âœ… Fallback wenn platformdirs nicht installiert
+
+---
+
+### 3ï¸âƒ£ Privilege Management (`src/legion/platform/privileges.py`)
+```python
+from legion.platform.privileges import (
+    is_admin,
+    require_admin,
+    request_elevation,
+    check_raw_socket_capability,
+)
+
+# Admin-Check (plattformunabhÃ¤ngig)
+if not is_admin():
+    print("Brauche Admin-Rechte!")
+    request_elevation()  # UAC auf Windows, sudo-Info auf Unix
+
+# Raw Socket Check (wichtig fÃ¼r nmap)
+if check_raw_socket_capability():
+    print("Kann nmap verwenden!")
+```
+
+**Features**:
+- âœ… Windows: UAC Elevation
+- âœ… Linux: sudo Instructions
+- âœ… Raw Socket Detection
+- âœ… Detaillierter Privilege-Status
+
+---
+
+### âœ… Phase 2: Tool Discovery System (Implementiert)
+
+#### 4ï¸âƒ£ Base Tool Class (`src/legion/tools/base.py`)
+```python
+from legion.tools.base import BaseTool, ToolResult
+
+class MyTool(BaseTool):
+    @property
+    def tool_name(self) -> str:
+        return "mytool"
+    
+    async def parse_output(self, result: ToolResult) -> Any:
+        # Parse tool output
+        return parsed_data
+
+# Usage
+tool = MyTool("/path/to/tool")
+result = await tool.run(["--arg1", "value"])
+if result.success:
+    print(result.stdout)
+```
+
+**Features**:
+- âœ… Abstrakte Basisklasse fÃ¼r alle Tools
+- âœ… Async Tool-AusfÃ¼hrung (nicht-blockierend)
+- âœ… ToolResult mit exit_code, stdout, stderr
+- âœ… Automatische Version-Detection
+- âœ… Validation & Error Handling
+
+---
+
+#### 5ï¸âƒ£ Tool Discovery (`src/legion/tools/discovery.py`)
+```python
+from legion.tools.discovery import find_tool, discover_all_tools
+
+# Find single tool
+nmap_path = find_tool("nmap")
+# Windows: C:\Program Files\Nmap\nmap.exe
+# Linux:   /usr/bin/nmap
+
+# Discover all common tools
+tools = discover_all_tools()
+for name, path in tools.items():
+    print(f"{name}: {path}")
+```
+
+**Suchstrategie**:
+1. âœ… Custom Paths (user-konfiguriert)
+2. âœ… System PATH (shutil.which)
+3. âœ… Common Locations (OS-spezifisch)
+   - **Windows**: Program Files, C:\Tools
+   - **Linux**: /usr/bin, /usr/local/bin, /opt, Kali-spezifisch
+4. âœ… Windows Registry (nur Windows)
+
+**Features**:
+- âœ… Cross-Platform Tool Finding
+- âœ… Automatic .exe Extension (Windows)
+- âœ… WSL Support
+- âœ… Common Tool Locations kennen
+
+---
+
+#### 6ï¸âƒ£ Tool Registry (`src/legion/tools/registry.py`)
+```python
+from legion.tools.registry import get_registry
+
+registry = get_registry()
+
+# Get tool (mit Caching)
+nmap = registry.get_tool("nmap")
+
+# Discover all tools
+registry.discover_all()
+
+# Custom path hinzufÃ¼gen
+registry.add_custom_path("nmap", Path("C:/CustomTools"))
+
+# Cache wird automatisch gespeichert in:
+# Windows: %LOCALAPPDATA%\GothamSecurity\legion\Cache\tool_registry.json
+# Linux:   ~/.cache/legion/tool_registry.json
+```
+
+**Features**:
+- âœ… Zentrales Tool-Management
+- âœ… Persistent Caching (JSON)
+- âœ… Custom Path Support
+- âœ… Cache Invalidation
+- âœ… Singleton Pattern
+
+---
+
+#### 7ï¸âƒ£ Nmap Wrapper (Beispiel-Implementation)
+```python
+from legion.tools.nmap import NmapTool
+
+nmap = NmapTool()  # Auto-discovery via Registry
+
+if await nmap.validate():
+    # Scan durchfÃ¼hren
+    result = await nmap.scan(
+        target="192.168.1.0/24",
+        args=["-sV", "-T4"],
+        timeout=300.0
+    )
+    
+    if result.success:
+        print(result.stdout)
+        # XML parsing kommt in Phase 3
+```
+
+**Features**:
+- âœ… Platform-agnostisches Nmap Interface
+- âœ… Async Scanning
+- âœ… Auto-Discovery Integration
+- âœ… Version Detection
+- â³ XML Parsing (Phase 3)
+
+---
+
+## ðŸ“‹ Migrations-Roadmap
+
+| Phase | Status | Dauer | NÃ¤chste Schritte |
+|-------|--------|-------|------------------|
+| **1. Foundation** | âœ… **100%** | Woche 1-2 | *Abgeschlossen* |
+| **2. Tool Discovery** | âœ… **100%** | Woche 3-4 | *Abgeschlossen* |
+| **3. Core Logic** | âœ… **100%** | Woche 5-7 | *Abgeschlossen* |
+| **4. Configuration** | âœ… **100%** | Woche 8 | *Abgeschlossen* |
+| **5. UI Migration** | ï¿½ **40%** | Woche 9-12 | UI-Refresh Bug fixen |
+| **6. Additional Tools** | ðŸ“‹ **0%** | Woche 13-14 | Weitere Tool-Wrapper |
+| **7. Testing & Polish** | ðŸ“‹ **0%** | Woche 15-16 | Produktionsreife |
+| **8. Legacy Cleanup** | ðŸ“‹ **0%** | Woche 17+ | Alten Code entfernen |
+
+**Aktueller Stand**: Phase 5 (2.7/6 Tasks - 45%) ï¿½
+
+---
+
+## ðŸ”§ Technologie-Stack
+
+### Basis
+- **Python**: 3.10+ (Type Hints, dataclasses)
+- **Build System**: pyproject.toml + setuptools
+- **Package Structure**: src-layout (modern best practice)
+
+### Dependencies
+```toml
+# Kern-Dependencies
+PyQt6              # GUI Framework (cross-platform)
+SQLAlchemy         # Database (async support)
+platformdirs       # OS-spezifische Pfade
+psutil             # Prozess-Management
+pathlib            # Moderne Pfad-Operationen (stdlib)
+tomli              # TOML parser (Python 3.10, stdlib in 3.11+)
+tomli-w            # TOML writer
+
+# Development
+pytest             # Testing
+black              # Code Formatting
+ruff               # Linting
+mypy               # Type Checking
+```
+
+---
+
+## ðŸŽ¯ Design-Prinzipien
+
+### 1. **Platform-Agnostic**
+```python
+# âŒ VORHER (Linux-only)
+subprocess.Popen("nmap -sV 192.168.1.1", shell=True)
+os.system('cp -r "' + source + '" "' + dest + '"')
+
+# âœ… NACHHER (Cross-Platform)
+from legion.tools.nmap import NmapWrapper
+nmap = NmapWrapper()
+await nmap.scan("192.168.1.1", ["-sV"])
+```
+
+### 2. **Type-Safe**
+```python
+# VollstÃ¤ndige Type Hints Ã¼berall
+def detect_platform() -> PlatformInfo:
+    """Type-safe platform detection."""
+    ...
+
+@dataclass
+class PlatformInfo:
+    system: Literal["Windows", "Linux"]
+    version: str
+    is_admin: bool
+```
+
+### 3. **Testable**
+```python
+# Dependency Injection fÃ¼r einfaches Mocking
+class ScanManager:
+    def __init__(self, nmap: NmapWrapper, db: Database):
+        self.nmap = nmap  # Easily mockable
+        self.db = db
+```
+
+### 4. **Secure**
+```python
+# Path Traversal Protection
+def safe_path_join(base: Path, *parts: str) -> Path:
+    result = base.joinpath(*parts).resolve()
+    if not result.is_relative_to(base):
+        raise ValueError("Path traversal detected!")
+    return result
+
+# Keine shell=True mehr
+subprocess.Popen(["nmap", "-sV", ip])  # Sicher!
+```
+
+---
+
+### âœ… Phase 3: Core Logic (Implementiert)
+
+#### 8ï¸âƒ£ Data Models (`src/legion/core/models/`)
+```python
+from legion.core.models import Host, Port, Service
+
+# Host model with full nmap data
+host = Host(
+    ip="192.168.1.1",
+    hostname="router.local",
+    mac_address="00:11:22:33:44:55",
+    vendor="Cisco Systems",
+    os_name="Linux 3.2 - 4.9",
+    os_accuracy=95,
+    state="up",
+    distance=1,
+    uptime=864000  # 10 days
+)
+
+# Port model with service details
+port = Port(
+    number=22,
+    protocol="tcp",
+    state="open",
+    service_name="ssh",
+    service_product="OpenSSH",
+    service_version="8.2p1",
+    confidence=10
+)
+```
+
+**Features**:
+- âœ… Type-safe dataclasses
+- âœ… Full nmap attribute support
+- âœ… OS detection (name, family, accuracy)
+- âœ… Service versioning (product, version, CPE)
+- âœ… Timestamps (discovered_at, last_seen, last_boot)
+
+---
+
+#### 9ï¸âƒ£ Nmap XML Parser (`src/legion/tools/nmap/parser.py`)
+```python
+from legion.tools.nmap.parser import NmapXMLParser
+
+parser = NmapXMLParser()
+
+# Parse from file
+result = parser.parse_file("scan.xml")
+
+# Parse from string
+result = parser.parse_string(xml_content)
+
+# Access structured data
+for host in result.hosts:
+    print(f"Host: {host.ip} ({host.hostname})")
+    print(f"OS: {host.os_name} ({host.os_accuracy}%)")
+    
+    # Get ports for this host
+    for port in result.ports.get(host.ip, []):
+        print(f"  {port.number}/{port.protocol}: {port.service_name}")
+```
+
+**Features**:
+- âœ… Complete XML parsing
+- âœ… Host attributes (IP, hostname, MAC, vendor)
+- âœ… OS detection (name, family, accuracy, CPE)
+- âœ… Port/Service details (state, product, version)
+- âœ… NSE script results
+- âœ… Uptime & distance parsing
+- âœ… Scan metadata (args, version, timestamps)
+
+---
+
+#### ðŸ”Ÿ Simple Database (`src/legion/core/database.py`)
+```python
+from legion.core.database import SimpleDatabase
+
+db = SimpleDatabase(project_name="pentest_2025")
+
+# Save hosts
+db.save_host(host)
+
+# Save ports
+db.save_port(host.ip, port)
+
+# Query data
+all_hosts = db.get_all_hosts()
+up_hosts = db.get_up_hosts()
+ports = db.get_ports("192.168.1.1")
+
+# Search by service
+ssh_hosts = db.find_hosts_by_service("ssh")
+
+# Statistics
+stats = db.get_stats()
+# {'total_hosts': 10, 'up_hosts': 8, 'down_hosts': 2, 'total_ports': 42}
+```
+
+**Features**:
+- âœ… JSON-based storage (easy inspection)
+- âœ… In-memory caching
+- âœ… Host/Port/Service management
+- âœ… Search by service
+- âœ… Statistics & filtering
+- âœ… Datetime serialization
+- âœ… Project-based organization
+- â³ SQLAlchemy migration (Phase 6)
+
+---
+
+#### 1ï¸âƒ£1ï¸âƒ£ Scanner Manager (`src/legion/core/scanner.py`)
+```python
+from legion.core.scanner import ScanManager
+
+scanner = ScanManager(
+    database=db,
+    max_concurrent_scans=3,
+    result_dir=Path("./scans")
+)
+
+# Add callbacks
+scanner.add_progress_callback(lambda job: print(f"Status: {job.status}"))
+scanner.add_completion_callback(lambda job: print(f"Done: {job.hosts_found} hosts"))
+
+# Start workers
+await scanner.start()
+
+# Queue scans
+job_id1 = await scanner.queue_scan("192.168.1.0/24", "quick")
+job_id2 = await scanner.queue_scan("192.168.1.1", "full", ports="1-65535")
+
+# Wait for completion
+await scanner.wait_for_completion()
+
+# Get results
+job = scanner.get_job(job_id1)
+print(f"Found {job.hosts_found} hosts, {job.ports_found} ports")
+print(f"Duration: {job.duration}s")
+```
+
+**Features**:
+- âœ… Async scan queue management
+- âœ… Configurable worker pool
+- âœ… Progress tracking & callbacks
+- âœ… Automatic result parsing
+- âœ… Database integration
+- âœ… Scan profiles (quick, full, stealth, aggressive)
+- âœ… Timeout & error handling
+- âœ… Statistics & job tracking
+
+**Scan Profiles**:
+- `quick`: Fast scan, top 100 ports (-T4 -F)
+- `full`: All 65535 ports (-T4 -p-)
+- `stealth`: SYN scan, slower (-sS -T2)
+- `version`: Service version detection (-sV)
+- `os`: OS detection (-O)
+- `aggressive`: Full scan with scripts (-A -T4)
+
+---
+
+#### 1ï¸âƒ£2ï¸âƒ£ End-to-End Integration (`src/legion/core/integration_test.py`)
+```python
+# Complete workflow test:
+# 1. Parse sample nmap XML
+# 2. Store in database
+# 3. Query and search
+# 4. Display statistics
+
+# Test Results:
+# âœ… 3 hosts parsed (2 up, 1 down)
+# âœ… 7 ports stored
+# âœ… 7 services detected
+# âœ… OS detection working (Linux, Windows)
+# âœ… Search by service working
+# âœ… Statistics accurate
+```
+
+**Tested Scenarios**:
+- âœ… Router with SSH/HTTP/HTTPS (Linux)
+- âœ… Workstation with RDP/SMB (Windows 10)
+- âœ… Offline host (down state)
+- âœ… Service search (find SSH hosts)
+- âœ… OS filtering (Linux vs Windows)
+- âœ… Port statistics (open/closed/filtered)
+
+---
+
+### âœ… Phase 4: Configuration System (Implementiert)
+
+#### 1ï¸âƒ£3ï¸âƒ£ Config Schema (`src/legion/config/schema.py`)
+```python
+from legion.config import LegionConfig, get_default_config
+
+# Get default configuration
+config = get_default_config()
+
+# Access settings
+print(f"Scan Timeout: {config.scanning.timeout}s")
+print(f"Max Concurrent: {config.scanning.max_concurrent}")
+print(f"Log Level: {config.logging.level}")
+print(f"UI Theme: {config.ui.theme}")
+
+# Modify settings
+config.scanning.timeout = 600
+config.logging.level = "DEBUG"
+config.ui.theme = "dark"
+
+# Validate
+config.validate()  # Raises ValueError if invalid
+```
+
+**Config Sections**:
+- âœ… **Scanning**: timeout, max_concurrent, profiles, timing
+- âœ… **Logging**: level, file/console, rotation
+- âœ… **Tools**: auto-discovery, custom paths, caching
+- âœ… **UI**: theme, font size, auto-refresh
+- âœ… **Database**: type (json/sqlite), backup
+- âœ… **Project**: name, description, scan profile
+
+---
+
+#### 1ï¸âƒ£4ï¸âƒ£ Config Manager (`src/legion/config/manager.py`)
+```python
+from legion.config import ConfigManager, get_config
+
+# Load config (auto-creates if not exists)
+config = get_config()
+
+# Or use manager directly
+manager = ConfigManager()
+config = manager.load()
+
+# Update via manager
+manager.update(
+    scanning__timeout=900,
+    logging__level="INFO",
+    ui__theme="dark"
+)
+
+# Save changes
+manager.save()
+
+# Reset to defaults
+manager.reset()
+```
+
+**Features**:
+- âœ… TOML-based (human-readable)
+- âœ… Automatic file creation
+- âœ… Type-safe loading/saving
+- âœ… Batch updates
+- âœ… Global singleton instance
+- âœ… None-value filtering (TOML compatible)
+
+**Config Locations**:
+- Windows: `%APPDATA%\legion\legion.toml`
+- Linux: `~/.config/legion/legion.toml`
+
+---
+
+#### 1ï¸âƒ£5ï¸âƒ£ Legacy Migration (`src/legion/config/init.py`)
+```python
+from legion.config import init_user_config, find_legacy_config
+
+# Initialize config (auto-migrates from legion.conf if found)
+manager = init_user_config()
+
+# Find legacy config
+legacy = find_legacy_config()
+if legacy:
+    print(f"Found legacy config: {legacy}")
+    # Automatic backup + migration to TOML
+
+# Reset to factory defaults
+from legion.config import reset_user_config
+manager = reset_user_config()  # Creates backup first
+```
+
+**Migration Features**:
+- âœ… Finds old `legion.conf` (INI format)
+- âœ… Automatic backup (`legion.conf.backup`)
+- âœ… Maps legacy settings to new structure
+- âœ… Validates migrated config
+- âœ… Saves as TOML
+
+**Migrated Settings**:
+- `max-fast-processes` â†’ `scanning.max_concurrent`
+- `screenshooter-timeout` â†’ `scanning.timeout`
+- `hydra-path` â†’ `tools.hydra_path`
+- (More mappings as needed)
+
+---
+
+#### 1ï¸âƒ£6ï¸âƒ£ Config Template (`src/legion/config/template.toml`)
+```toml
+# Legion Configuration Template
+# ============================
+
+[scanning]
+# Scan timeout in seconds (default: 300 = 5 minutes)
+timeout = 300
+
+# Maximum number of concurrent scans (default: 3)
+max_concurrent = 3
+
+# Default scan profile
+# Options: "quick", "full", "stealth", "version", "os", "aggressive"
+default_profile = "quick"
+
+# Nmap timing template (0=paranoid, 5=insane)
+timing_template = 4
+
+[logging]
+# Logging level: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+level = "INFO"
+
+# Enable logging to file
+file_enabled = true
+
+# Maximum log file size in MB
+max_file_size_mb = 10
+
+[tools]
+# Automatically discover tool paths
+auto_discover = true
+
+# Custom tool paths (optional)
+# nmap_path = "/usr/bin/nmap"
+# hydra_path = "/usr/bin/hydra"
+
+[ui]
+# UI theme: "light", "dark", "system"
+theme = "system"
+
+# Base font size (6-24)
+font_size = 10
+
+[database]
+# Database type: "json" or "sqlite"
+type = "json"
+
+# Auto-backup enabled
+auto_backup = true
+
+[project]
+# Default project name
+name = "default"
+```
+
+**Features**:
+- âœ… 180 lines of documentation
+- âœ… All options explained
+- âœ… Platform-specific hints
+- âœ… Examples for custom paths
+- âœ… Ready to copy & customize
+
+---
+
+#### 1ï¸âƒ£7ï¸âƒ£ Integration Tests (`src/legion/config/config_test.py`)
+```python
+# Run all tests:
+python src/legion/config/config_test.py
+
+# Test Results:
+# âœ… Schema Validation (3 sub-tests)
+# âœ… Config Manager (4 sub-tests)
+# âœ… Template Creation (3 sub-tests)
+# âœ… Legacy Migration (verified)
+# âœ… Full Workflow (5 steps)
+#
+# Results: 5/5 tests passed
+```
+
+**Test Coverage**:
+- âœ… Default config validation
+- âœ… Invalid value detection
+- âœ… TOML save/load cycle
+- âœ… Manager update method
+- âœ… Config persistence
+- âœ… Template generation
+- âœ… Legacy migration accuracy
+- âœ… Complete workflow end-to-end
+
+---
+
+## ðŸ§ª Wie testen?
+
+### Phase 1 & 2 Tests
+
+#### Voraussetzung: Python installieren
+```powershell
+# Windows: Download von python.org
+# Oder: Microsoft Store
+
+# PrÃ¼fen:
+py --version  # Sollte 3.10+ sein
+```
+
+### Installation
+```powershell
+# 1. Repository klonen (bereits erledigt âœ“)
+# 2. Virtual Environment (optional aber empfohlen)
+py -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 3. Dependencies installieren
+pip install -r requirements.txt
+# oder direkt:
+pip install platformdirs
+```
+
+### Tests ausfÃ¼hren
+```powershell
+# === PHASE 1 TESTS ===
+
+# Test 1: Platform Detection
+py src/legion/platform/detector.py
+
+# Test 2: Path Management  
+py src/legion/platform/paths.py
+
+# Test 3: Privilege Checking
+py src/legion/platform/privileges.py
+
+# Test 4: Main Entry Point
+cd src; py -m legion; cd ..
+
+# === PHASE 2 TESTS ===
+
+# Test 5: Tool Discovery
+py src\legion\tools\discovery.py
+
+# Test 6: Tool Registry
+py src\legion\tools\registry.py
+
+# Test 7: Nmap Wrapper (wenn nmap installiert)
+py src\legion\tools\nmap\wrapper.py
+
+# === PHASE 3 TESTS ===
+
+# Test 8: Data Models
+cd src; py -m legion.core.models.host; cd ..
+
+# Test 9: Nmap XML Parser
+cd src; py -m legion.tools.nmap.parser; cd ..
+
+# Test 10: Simple Database
+cd src; py -m legion.core.database; cd ..
+
+# Test 11: Scanner Manager (mock mode)
+cd src; py -m legion.core.scanner; cd ..
+
+# Test 12: End-to-End Integration (EMPFOHLEN!)
+cd src; py -m legion.core.integration_test; cd ..
+```
+
+### Erwartete Ausgabe (Phase 3)
+```
+======================================================================
+PHASE 3 - END-TO-END INTEGRATION TEST
+======================================================================
+
+Database: integration_test
+Location: C:\Users\...\AppData\Local\GothamSecurity\legion\projects\integration_test
+
+----------------------------------------------------------------------
+Parsing Sample Nmap XML Files
+----------------------------------------------------------------------
+
+Processing: Router (192.168.1.1)
+  Found 1 host(s)
+  Stored host: 192.168.1.1 with 3 port(s)
+
+Processing: Workstation (192.168.1.10)
+  Found 1 host(s)
+  Stored host: 192.168.1.10 with 4 port(s)
+
+Total stored: 3 hosts, 7 ports
+
+----------------------------------------------------------------------
+Database Contents
+----------------------------------------------------------------------
+
+IP Address: 192.168.1.1
+Hostname: router.local
+State: up
+OS: Linux 3.2 - 4.9 (95% accuracy)
+MAC: 00:11:22:33:44:55
+Vendor: Cisco Systems
+
+Ports: 3
+  22/tcp - open - ssh (OpenSSH 8.2p1)
+  80/tcp - open - http (Apache httpd 2.4.41)
+  443/tcp - open - https (Apache httpd 2.4.41)
+
+----------------------------------------------------------------------
+Database Statistics
+----------------------------------------------------------------------
+
+Total Hosts: 3
+  Up: 2
+  Down: 1
+
+Total Ports: 7
+  Open: 7
+
+Services detected:
+  ssh: 1
+  http: 1
+  https: 1
+  msrpc: 1
+  [...]
+
+======================================================================
+âœ… Parser: Working
+âœ… Database: Working
+âœ… Data Models: Working
+âœ… Search Functions: Working
+
+Phase 3 Core Logic is COMPLETE!
+======================================================================
+```
+
+### Erwartete Ausgabe (Phase 1 & 2)
+```
+======================================================================
+Legion - Cross-Platform Penetration Testing Framework
+Version: 2.0.0-alpha1
+======================================================================
+
+Platform: Windows 10.0.19045 on AMD64 - Python 3.11.0
+
+Privilege Status:
+  âœ“ Is Admin: False
+  âœ— Can Raw Socket: False
+  âœ“ Elevation Possible: True
+
+Directories:
+  Data:   C:\Users\...\AppData\Local\GothamSecurity\legion
+  Config: C:\Users\...\AppData\Local\GothamSecurity\legion
+  Logs:   C:\Users\...\AppData\Local\GothamSecurity\legion\Logs
+
+âš ï¸  WARNING: Not running with administrator privileges!
+   Some features (like nmap scanning) may not work correctly.
+
+======================================================================
+Legion v2.0 is under development.
+...
+```
+
+---
+
+## ðŸ“ˆ NÃ¤chste Schritte (Phase 4)
+
+### Configuration System
+
+**Ziel**: TOML-basiertes Konfigurationssystem mit Hot-Reload
+
+#### 4.1 Config Schema
+```python
+# src/legion/config/schema.py (geplant)
+
+from legion.config import Config
+
+config = Config.load("legion.toml")
+
+# Access settings
+scan_timeout = config.scanning.timeout
+max_workers = config.scanning.max_concurrent
+log_level = config.logging.level
+```
+
+#### 4.2 User Preferences
+```python
+# legion.toml (geplant)
+
+[scanning]
+timeout = 300
+max_concurrent = 3
+default_profile = "quick"
+
+[logging]
+level = "INFO"
+file = "legion.log"
+
+[tools]
+nmap_path = "/usr/bin/nmap"
+auto_discover = true
+```
+
+#### 4.3 Project Management
+```python
+# src/legion/core/project.py (geplant)
+
+from legion.core.project import Project
+
+project = Project.create("pentest_2025")
+project.settings.scan_profile = "aggressive"
+project.save()
+
+# Auto-saves to: ~/.local/share/legion/projects/pentest_2025/
+```
+
+---
+
+## ðŸ’¡ Neue Features in Phase 3
+
+| Feature | Beschreibung | Status |
+|---------|--------------|--------|
+| **Data Models** | Host, Port, Service dataclasses | âœ… |
+| **XML Parser** | Nmap XML â†’ structured data | âœ… |
+| **Database** | SimpleDatabase (JSON-based) | âœ… |
+| **Scanner Manager** | Async queue-based scanning | âœ… |
+| **Scan Profiles** | Quick, Full, Stealth, Aggressive | âœ… |
+| **Progress Tracking** | Callbacks & job monitoring | âœ… |
+| **Service Search** | Find hosts by service | âœ… |
+| **OS Detection** | Parse & store OS info | âœ… |
+| **Statistics** | Host/Port/Service counts | âœ… |
+| **Integration Test** | End-to-end workflow | âœ… |
+
+---
+
+## ðŸ“ˆ FrÃ¼here Schritte (Phase 3) - ERLEDIGT âœ…
+
+### Core Logic Implementation
+
+**Status**: âœ… **ABGESCHLOSSEN**
+
+Komplette Scan-Pipeline von XML-Parsing bis Database-Storage:
+
+**Implementiert**:
+- âœ… `src/legion/core/models/` - Host, Port, Service dataclasses
+- âœ… `src/legion/tools/nmap/parser.py` - XML Parser (413 Zeilen)
+- âœ… `src/legion/core/database.py` - SimpleDatabase (400+ Zeilen)
+- âœ… `src/legion/core/scanner.py` - ScanManager (430+ Zeilen)
+- âœ… `src/legion/core/integration_test.py` - E2E Tests
+
+**Getestet auf Windows 10**:
+- âœ… Parser parst komplexe XML (OS, Services, Scripts)
+- âœ… Database speichert/lÃ¤dt Host+Port Daten
+- âœ… Scanner Queue-Management funktioniert
+- âœ… Integration Test: 3 Hosts, 7 Ports, alle Services
+- âœ… Search funktioniert (by service, by OS)
+- âœ… Statistiken korrekt
+
+---
+
+## ðŸ“ˆ NÃ¤chste Schritte (Phase 3) - ERLEDIGT âœ…
+
+### Core Logic Implementation
+
+**Ziel**: Kern-Logik fÃ¼r Scanning, Database, Project Management
+
+#### 3.1 Nmap XML Parser
+```python
+# src/legion/tools/nmap/parser.py (geplant)
+
+from legion.tools.nmap.parser import NmapXMLParser
+
+parser = NmapXMLParser()
+scan_data = parser.parse_file("scan_results.xml")
+
+# Structured data:
+for host in scan_data.hosts:
+    print(f"Host: {host.ip} ({host.hostname})")
+    for port in host.ports:
+        print(f"  {port.number}/{port.protocol}: {port.service}")
+```
+
+#### 3.2 Database Layer
+```python
+# src/legion/core/database.py (geplant)
+
+from legion.core.database import Database
+from legion.core.models import Host, Port, Service
+
+async with Database("project.db") as db:
+    # Store scan results
+    host = Host(ip="192.168.1.1", hostname="router.local")
+    await db.save(host)
+    
+    # Query
+    hosts = await db.query(Host).filter(status="up").all()
+```
+
+#### 3.3 Scanner Orchestration
+```python
+# src/legion/core/scanner.py (geplant)
+
+from legion.core.scanner import ScanManager
+
+scanner = ScanManager()
+
+# Queue scans
+await scanner.queue_scan("192.168.1.0/24", scan_type="discovery")
+await scanner.queue_scan("192.168.1.1", scan_type="version")
+
+# Execute all queued scans
+await scanner.execute_all()
+```
+
+---
+
+## ðŸ’¡ Neue Features in Phase 2
+
+| Feature | Beschreibung | Status |
+|---------|--------------|--------|
+| **BaseTool** | Abstrakte Klasse fÃ¼r alle Tools | âœ… |
+| **Async Execution** | Nicht-blockierende Tool-AusfÃ¼hrung | âœ… |
+| **Tool Discovery** | Automatisches Finden auf allen OS | âœ… |
+| **PATH Search** | shutil.which Integration | âœ… |
+| **Common Locations** | OS-spezifische Tool-Pfade | âœ… |
+| **Registry Search** | Windows Registry Integration | âœ… |
+| **Tool Caching** | Persistent Tool Registry | âœ… |
+| **Custom Paths** | User-definierte Tool-Pfade | âœ… |
+| **Nmap Wrapper** | Beispiel-Implementation | âœ… |
+| **Version Detection** | Automatische Tool-Version | âœ… |
+
+---
+
+## ðŸ“ˆ FrÃ¼here Schritte (Phase 2) - ERLEDIGT âœ…
+
+### Tool Discovery System
+
+**Status**: âœ… **ABGESCHLOSSEN**
+
+Automatisches Finden von Tools auf allen Betriebssystemen implementiert:
+
+**Implementiert**:
+- âœ… `src/legion/tools/base.py` - BaseTool Klasse
+- âœ… `src/legion/tools/discovery.py` - Tool Discovery
+- âœ… `src/legion/tools/registry.py` - Tool Registry mit Caching
+- âœ… `src/legion/tools/nmap/wrapper.py` - Nmap Wrapper
+
+**Suchstrategie funktioniert**:
+1. Custom Paths (user-configured)
+2. System PATH
+3. Common Install Locations
+4. Windows Registry
+
+**Getestet auf Windows 10**:
+- âœ… Discovery findet Tools in PATH
+- âœ… Common Locations korrekt fÃ¼r Windows
+- âœ… Registry-Search funktioniert
+- âœ… Caching in AppData\Local
+
+---
+
+## ðŸ’¡ Vorteile der neuen Architektur
+
+| Aspekt | Alt (Legacy) | Neu (v2.0) |
+|--------|-------------|------------|
+| **Plattform** | Nur Linux | Windows & Linux |
+| **Shell-Scripts** | Viele .sh Files | Pure Python |
+| **Type Safety** | Minimal | 100% Type Hints |
+| **Testing** | Schwierig | Dependency Injection |
+| **Security** | shell=True | Keine Shell-Execution |
+| **Pfade** | Hardcoded | OS-spezifisch |
+| **Docs** | Veraltet | Umfassend |
+| **Build** | setup.py | pyproject.toml |
+
+---
+
+## ðŸ“š Dokumentation
+
+Alle Details in:
+
+- **[MIGRATION_PLAN.md](MIGRATION_PLAN.md)**: Kompletter 8-Phasen Plan
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Technische Details
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)**: Installation & Testing
+- **[src/README.md](src/README.md)**: Quick-Start fÃ¼r neue Struktur
+
+---
+
+## ðŸ¤ Beitragen
+
+Der Code ist jetzt viel besser strukturiert fÃ¼r Contributions:
+
+1. **Type Hints** â†’ Bessere IDE-UnterstÃ¼tzung
+2. **Klare Modules** â†’ Einfach zu navigieren
+3. **Docs** â†’ Jede Funktion dokumentiert
+4. **Tests** â†’ pytest-ready
+
+### Code-Standards
+```python
+# Type Hints Ã¼berall
+def get_data_dir() -> Path:
+    """Get user data directory."""
+    ...
+
+# Docstrings (Google Style)
+def find_tool(name: str) -> Optional[Path]:
+    """
+    Find executable for a tool.
+    
+    Args:
+        name: Tool name (e.g., 'nmap').
+    
+    Returns:
+        Path to executable, or None if not found.
+    """
+```
+
+---
+
+## âœ¨ Zusammenfassung
+
+**Phase 1 ist abgeschlossen!** Die Foundation steht:
+
+âœ… Platform Detection  
+âœ… Path Management  
+âœ… Privilege Handling  
+âœ… Dokumentation  
+âœ… Projekt-Struktur  
+
+**Bereit fÃ¼r Phase 2**: Tool Discovery & Nmap-Wrapper
+
+---
+
+**Stand**: 2025-01-15  
+**Version**: 2.0.0-alpha5  
+**Status**: Phase 5 (Task 2/6) ðŸ”„  
+**Maintainer**: Gotarr
+
+---
+
+## ðŸŽ¯ Vision
+
+**Endziel**: Ein vollstÃ¤ndig plattformunabhÃ¤ngiges, modernes Pentesting-Framework in Pure Python, das auf Windows und Linux gleichermaÃŸen lÃ¤uft - ohne Bash-Scripts, mit voller Type-Safety und erstklassiger Developer Experience.
+
+---
+
+## Phase 5: UI Migration - Tasks
+
+Siehe **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)** fÃ¼r Details.
+
+### Task 1: UI Architecture Setup âœ… (100%)
+- âœ… Modern MainWindow base class
+- âœ… Menu bar (File, Scan, View, Help)
+- âœ… Toolbar mit Icons
+- âœ… Statusbar (Status + Project info)
+- âœ… Config integration (theme, UI settings)
+- âœ… Dependency Injection (Database, Scanner, ConfigManager)
+
+**Dateien**: `src/legion/ui/mainwindow.py` (500+ Zeilen)
+
+---
+
+### Task 2: Database Bridge & Models âœ… (100%)
+- âœ… HostsTableModel mit QAbstractTableModel
+- âœ… PortsTableModel mit Master-Detail Pattern
+- âœ… Color-coding nach State (GrÃ¼n = up, Rot = down)
+- âœ… Tooltips mit Details, Sortierbar
+- âœ… Selection Handling (Host â†’ Ports Update)
+- âœ… Auto-Refresh alle 10 Sek. (konfigurierbar)
+- âœ… Testing mit 5 Sample-Hosts erfolgreich
+
+**Dateien**: 
+- `src/legion/ui/models.py` (430+ Zeilen)
+- Integration in MainWindow
+
+---
+
+### Task 3: Scanner Integration ï¿½ (70%)
+**Status**: Scans laufen, UI-Refresh fehlt (bekannter Bug)
+
+**Fertig**:
+- âœ… NewScanDialog (Target, Scan Type, Options)
+- âœ… ScanProgressDialog UI (noch nicht integriert)
+- âœ… AboutDialog
+- âœ… Scanner Integration (queue_scan, callbacks)
+- âœ… Qt Signals fÃ¼r Thread-Safety
+- âœ… Scans laufen erfolgreich (XML wird erstellt)
+- âœ… Daten werden in DB gespeichert
+
+**Probleme**:
+- âŒ **UI-Refresh triggert NICHT** nach Scan-Completion
+  - Symptom: Scan lÃ¤uft, DB wird gefÃ¼llt, aber Tabelle zeigt nichts
+  - Vermutung: Async Event Loop nicht mit Qt integriert
+  - Workaround: Manueller Refresh (geplant)
+
+**Dateien**:
+- `src/legion/ui/dialogs.py` (380+ Zeilen)
+- `src/legion/core/scanner.py` (Bug-Fixes)
+- `tests/ui/*.py` (7 Test-Scripts)
+
+---
+
+### Task 4: Config Dialog ðŸ“‹ (0%)
+**Geplant**:
+- Settings Dialog mit TOML-Editor
+- Theme Switcher (Live-Preview)
+- Tool Path Configuration
+- Scan Defaults
+- Apply/Save/Reset Buttons
+
+---
+
+### Task 5: Main Window Migration ðŸ“‹ (0%)
+**Geplant**:
+- Legacy `ui/gui.py` Code portieren
+- Remaining Dialogs (Add Host, Help, etc.)
+- Event Handler Updates
+- Theme Stylesheet Application
+- Legacy Imports entfernen
+
+---
+
+### Task 6: Testing & Polish ðŸ“‹ (0%)
+**Geplant**:
+- UI Integration Tests
+- Theme Testing (alle 3 Themes)
+- Performance Optimization
+- Bug Fixes
+- User Documentation
+- Screenshots/GIFs
+
+---
+
+**Phase 5 Status**: 2/6 Tasks Complete (33%)  
+**Aktueller Blocker**: UI-Refresh nach Scan  
+**NÃ¤chster Schritt**: Debug nmap â†’ UI Integration
+
+**Wir sind auf dem besten Weg! ðŸš€**
+

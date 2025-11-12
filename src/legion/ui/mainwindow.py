@@ -22,6 +22,7 @@ from legion.core.database import SimpleDatabase
 from legion.core.scanner import ScanManager, ScanJob
 from legion.ui.models import HostsTableModel, PortsTableModel
 from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog
+from legion.ui.settings import SettingsDialog
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +380,7 @@ class MainWindow(QMainWindow):
         Args:
             job: Completed scan job
         """
+        logger.debug(f"Scan completed: {job.target} - {job.hosts_found} hosts, {job.ports_found} ports")
         # Emit signal to update UI on main thread
         self.scan_signals.completed.emit(job)
     
@@ -437,8 +439,9 @@ class MainWindow(QMainWindow):
     
     def _on_settings(self) -> None:
         """Handle Settings action."""
-        # TODO: Open settings dialog with config editor (Phase 5.4)
-        QMessageBox.information(self, "Settings", "Settings dialog (TODO)")
+        dialog = SettingsDialog(self.config_manager, self)
+        dialog.settings_changed.connect(self._on_settings_changed)
+        dialog.exec()
     
     def _on_new_scan(self) -> None:
         """Handle New Scan action."""
@@ -497,6 +500,22 @@ class MainWindow(QMainWindow):
             self.config_manager.update(ui__theme=theme)
             self.config_manager.save()
             logger.info(f"Theme changed to: {theme}")
+    
+    def _on_settings_changed(self) -> None:
+        """Handle settings changed from settings dialog."""
+        # Reload config
+        self.config = self.config_manager.load()
+        
+        # Apply theme if changed
+        self._apply_theme(self.config.ui.theme)
+        
+        # Update UI elements
+        if hasattr(self, 'toolbar'):
+            self.toolbar.setVisible(self.config.ui.show_toolbar)
+        if hasattr(self, 'statusbar'):
+            self.statusbar.setVisible(self.config.ui.show_statusbar)
+        
+        logger.info("Settings reloaded and applied")
     
     def _on_about(self) -> None:
         """Show About dialog."""

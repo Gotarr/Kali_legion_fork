@@ -2,6 +2,48 @@
 
 The Legion repository is moving to https://github.com/hackman238/legion. All future releases, updates, etc will occur from there. Big improvements on the way! This repo under this organiztion will no longer be maintained.
 
+## 🚧 V2.0 Migration Status
+
+**This fork is currently undergoing a complete cross-platform rewrite.**  
+See **[STATUS.md](STATUS.md)** for details.
+
+**Phase 5: UI Migration** - 75% Complete (6/8 Tasks) ✅
+- ✅ Task 1: UI Architecture Setup
+- ✅ Task 2: Database Bridge & Models  
+- ✅ Task 3: Scanner Integration (qasync fix!)
+- ✅ Task 4: Production Integration
+- ✅ Task 5: Cleanup & Consolidation
+- ✅ Task 6: Settings Dialog
+- 📋 Task 7: Main Window Migration (next)
+
+Full progress: **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)**
+
+---
+
+## 🎉 **NEW UI AVAILABLE!**
+
+**Start Legion v2.0**:
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run
+py legion.py
+
+# Settings: File → Settings (Ctrl+,)
+```
+
+**Quick Start Guide**: [docs/QUICK_START.md](docs/QUICK_START.md)
+
+**Features**:
+- ✅ Cross-platform (Windows, Linux, macOS)
+- ✅ Modern PyQt6 UI
+- ✅ Async scanner with qasync
+- ✅ TOML configuration
+- ✅ Settings dialog (4 tabs!)
+- ✅ Auto-refresh tables
+- ✅ Color-coded results
+
 ##
 
 ![alt tag](https://github.com/GoVanguard/legion/blob/master/images/LegionBanner.png)

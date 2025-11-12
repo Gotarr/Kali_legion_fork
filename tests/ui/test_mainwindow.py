@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
 Test script for MainWindow with sample data.
+
+Uses qasync for proper Qt + asyncio integration.
 """
 
 import sys
+import asyncio
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from PyQt6.QtWidgets import QApplication
+import qasync
+
 from legion.config.manager import get_config_manager
 from legion.core.database import SimpleDatabase
 from legion.core.models import Host, Port
@@ -128,7 +133,18 @@ def main():
     # Create Qt application
     print("\n[4/5] Creating Qt application...")
     app = QApplication(sys.argv)
-    print("      QApplication created")
+    
+    # Setup qasync event loop
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    print("      QApplication created with qasync event loop")
+    
+    # Start scanner workers
+    async def start_scanner():
+        await scanner.start()
+    
+    loop.run_until_complete(start_scanner())
+    print("      Scanner workers started")
     
     # Create main window
     print("\n[5/5] Creating MainWindow...")
@@ -145,6 +161,7 @@ def main():
     print("  - Color coding: Green = up, Red = down")
     print("  - Tooltips: Hover over IP addresses")
     print("  - Auto-refresh: Every 10 seconds")
+    print("  - NEW: Scanner integration with qasync!")
     print("=" * 60)
     
     print("\nShowing window...")
@@ -153,9 +170,12 @@ def main():
     window.activateWindow()
     
     print("Window displayed! Check your screen.")
+    print("\nTry: Scan -> New Scan -> Enter target -> Start")
     print("Close the window to exit.\n")
     
-    sys.exit(app.exec())
+    # Run with qasync event loop
+    with loop:
+        loop.run_forever()
 
 
 if __name__ == "__main__":
