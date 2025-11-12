@@ -1092,8 +1092,8 @@ class MainWindow(QMainWindow):
                         "number": p.number,
                         "protocol": p.protocol,
                         "state": p.state,
-                        "service": p.service or "",
-                        "version": p.version or ""
+                        "service": p.service_name or "",
+                        "version": p.service_version or ""
                     }
                     for p in ports
                 ]
@@ -1211,8 +1211,8 @@ class MainWindow(QMainWindow):
                             "number": p.number,
                             "protocol": p.protocol,
                             "state": p.state,
-                            "service": p.service or "",
-                            "version": p.version or ""
+                            "service": p.service_name or "",
+                            "version": p.service_version or ""
                         }
                         for p in ports
                     ]

@@ -10,8 +10,9 @@ Date: 2025-11-11
 """
 
 import asyncio
+import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -96,12 +97,17 @@ class ScanManager:
         self.result_dir = result_dir or Path.cwd() / "scan_results"
         self.result_dir.mkdir(parents=True, exist_ok=True)
         
+        # Scan log directory
+        self.log_dir = Path.cwd() / "scan_logs"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        
         # Scan tracking
         self._jobs: Dict[str, ScanJob] = {}
         self._queue: asyncio.Queue[ScanJob] = asyncio.Queue()
         self._semaphore = asyncio.Semaphore(max_concurrent_scans)
         self._workers: List[asyncio.Task] = []
         self._running = False
+        self._running_tasks: Dict[str, asyncio.Task] = {}  # job_id -> task for cancellation
         
         # Tools
         self._nmap = NmapTool()
@@ -164,6 +170,9 @@ class ScanManager:
         await self._queue.put(job)
         self._notify_progress(job)
         
+        # Log scan queued event
+        self._log_scan_event(job, "queued")
+        
         return job.id
     
     def get_job(self, job_id: str) -> Optional[ScanJob]:
@@ -219,10 +228,18 @@ class ScanManager:
         """
         async with self._semaphore:
             try:
+                # Check if already cancelled before starting
+                if job.status == ScanStatus.CANCELLED:
+                    logger.debug(f"Job {job.id} was cancelled before execution")
+                    return
+                
                 # Update job status
                 job.status = ScanStatus.RUNNING
                 job.started_at = datetime.now()
                 self._notify_progress(job)
+                
+                # Log scan started event
+                self._log_scan_event(job, "started")
                 
                 # Prepare output file
                 output_file = self.result_dir / f"{job.id}.xml"
@@ -232,19 +249,40 @@ class ScanManager:
                 logger.debug(f"Starting nmap with args: {args}")
                 args.extend(["-oX", str(output_file)])
                 
-                # Execute scan (args as list, not *args)
-                result = await self._nmap.run(args)
+                # Store current task for cancellation
+                current_task = asyncio.current_task()
+                if current_task:
+                    self._running_tasks[job.id] = current_task
                 
-                if not result.success:
-                    raise RuntimeError(f"Scan failed: {result.stderr}")
+                try:
+                    # Execute scan (args as list, not *args)
+                    result = await self._nmap.run(args)
+                    
+                    # Check if cancelled during execution
+                    if job.status == ScanStatus.CANCELLED:
+                        logger.info(f"Scan {job.id} was cancelled during execution")
+                        return
+                    
+                    if not result.success:
+                        raise RuntimeError(f"Scan failed: {result.stderr}")
+                    
+                    # Process results
+                    await self._process_scan_result(job, output_file)
+                    
+                    # Mark complete
+                    job.status = ScanStatus.COMPLETED
+                    job.completed_at = datetime.now()
+                finally:
+                    # Remove from running tasks
+                    self._running_tasks.pop(job.id, None)
                 
-                # Process results
-                await self._process_scan_result(job, output_file)
-                
-                # Mark complete
-                job.status = ScanStatus.COMPLETED
+            except asyncio.CancelledError:
+                # Task was cancelled
+                job.status = ScanStatus.CANCELLED
                 job.completed_at = datetime.now()
-                
+                job.error = "Scan cancelled by user"
+                logger.info(f"Scan {job.id} cancelled")
+                raise  # Re-raise to let asyncio handle it
             except Exception as e:
                 job.status = ScanStatus.FAILED
                 job.completed_at = datetime.now()
@@ -254,6 +292,9 @@ class ScanManager:
                 logger.info(f"Scan finished: {job.id} - {job.status.value}")
                 self._notify_progress(job)
                 self._notify_completion(job)
+                
+                # Log scan finished event (completed, failed, or cancelled)
+                self._log_scan_event(job, "finished")
     
     def _build_scan_args(
         self,
@@ -305,6 +346,13 @@ class ScanManager:
             try:
                 # Get next job with timeout to allow checking _running flag
                 job = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                
+                # Check if job was cancelled while in queue
+                if job.status == ScanStatus.CANCELLED:
+                    logger.debug(f"Skipping cancelled job: {job.target}")
+                    self._queue.task_done()
+                    continue
+                
                 await self._execute_scan(job)
                 self._queue.task_done()
             except asyncio.TimeoutError:
@@ -358,6 +406,74 @@ class ScanManager:
         """Wait for all queued scans to complete."""
         await self._queue.join()
     
+    def cancel_scan(self, target: str) -> bool:
+        """
+        Cancel a specific scan by target.
+        
+        Args:
+            target: Target IP/hostname to cancel
+            
+        Returns:
+            True if scan was cancelled, False if not found or already completed
+        """
+        # Find job for this target
+        for job in self._jobs.values():
+            if job.target == target and not job.is_complete:
+                if job.status == ScanStatus.QUEUED:
+                    # Mark as cancelled (worker will skip it)
+                    job.status = ScanStatus.CANCELLED
+                    job.completed_at = datetime.now()
+                    self._log_scan_event(job, "cancelled")
+                    logger.info(f"Cancelled queued scan: {job.target}")
+                    return True
+                elif job.status == ScanStatus.RUNNING:
+                    # Mark as cancelled and try to cancel the task
+                    job.status = ScanStatus.CANCELLED
+                    job.completed_at = datetime.now()
+                    
+                    # Kill the running nmap process immediately
+                    killed = self._nmap.kill_current_process()
+                    if killed:
+                        logger.info(f"Killed nmap process for scan: {job.target}")
+                    
+                    # Try to cancel the running task
+                    task = self._running_tasks.get(job.id)
+                    if task and not task.done():
+                        task.cancel()
+                        logger.info(f"Cancelled running scan: {job.target}")
+                    
+                    self._log_scan_event(job, "cancelled")
+                    return True
+        return False
+    
+    def cancel_all_scans(self) -> int:
+        """
+        Cancel all pending and running scans.
+        
+        Returns:
+            Number of scans cancelled
+        """
+        # First, kill the current nmap process if any
+        self._nmap.kill_current_process()
+        
+        count = 0
+        for job in list(self._jobs.values()):
+            if not job.is_complete:
+                job.status = ScanStatus.CANCELLED
+                job.completed_at = datetime.now()
+                
+                # Try to cancel running task
+                if job.id in self._running_tasks:
+                    task = self._running_tasks[job.id]
+                    if not task.done():
+                        task.cancel()
+                
+                self._log_scan_event(job, "cancelled")
+                count += 1
+                logger.info(f"Cancelled scan: {job.target}")
+        
+        return count
+    
     def get_statistics(self) -> Dict[str, Any]:
         """Get scan statistics."""
         jobs = list(self._jobs.values())
@@ -372,6 +488,44 @@ class ScanManager:
             "total_hosts": sum(j.hosts_found for j in jobs),
             "total_ports": sum(j.ports_found for j in jobs),
         }
+    
+    def _log_scan_event(self, job: ScanJob, event: str) -> None:
+        """
+        Log scan event to JSON file.
+        
+        Args:
+            job: Scan job
+            event: Event type (queued, started, finished, cancelled)
+        """
+        try:
+            log_file = self.log_dir / f"{job.id}.json"
+            
+            # Convert job to dict
+            job_dict = {
+                "id": job.id,
+                "target": job.target,
+                "scan_type": job.scan_type,
+                "options": job.options,
+                "status": job.status.value,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "started_at": job.started_at.isoformat() if job.started_at else None,
+                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "error": job.error,
+                "hosts_found": job.hosts_found,
+                "ports_found": job.ports_found,
+                "duration": job.duration,
+                "event": event,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Append to log file (each line is a JSON event - JSONL format)
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(job_dict) + '\n')
+                
+            logger.debug(f"Logged {event} event for scan {job.id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to log scan event: {e}")
 
 
 # Demo/Test code

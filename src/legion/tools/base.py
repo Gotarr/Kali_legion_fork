@@ -107,6 +107,7 @@ class BaseTool(ABC):
         """
         self._tool_path = tool_path
         self._tool_info: Optional[ToolInfo] = None
+        self._current_process: Optional[asyncio.subprocess.Process] = None
     
     @property
     @abstractmethod
@@ -134,6 +135,40 @@ class BaseTool(ABC):
         """Set the tool path and invalidate cached info."""
         self._tool_path = path
         self._tool_info = None  # Invalidate cache
+    
+    def kill_current_process(self) -> bool:
+        """
+        Kill the currently running process if any.
+        
+        Returns:
+            True if a process was killed, False if no process was running.
+        
+        Example:
+            >>> nmap = NmapTool()
+            >>> # ... start scan in background
+            >>> nmap.kill_current_process()  # Stop it immediately
+        """
+        if self._current_process and self._current_process.returncode is None:
+            try:
+                # On Windows, use taskkill for force termination
+                import platform
+                if platform.system() == "Windows":
+                    import subprocess
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/PID", str(self._current_process.pid)],
+                            capture_output=True,
+                            timeout=1.0
+                        )
+                    except Exception:
+                        # Fallback to normal kill
+                        self._current_process.kill()
+                else:
+                    self._current_process.kill()
+                return True
+            except Exception:
+                pass
+        return False
     
     async def validate(self) -> bool:
         """
@@ -238,6 +273,9 @@ class BaseTool(ABC):
                 cwd=cwd,
             )
             
+            # Store process reference for potential cancellation
+            self._current_process = process
+            
             # Communicate with timeout
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -251,6 +289,38 @@ class BaseTool(ABC):
                 process.kill()
                 await process.wait()
                 raise
+            except asyncio.CancelledError:
+                # Kill the process on cancellation - use aggressive kill on Windows
+                if process.returncode is None:  # Process still running
+                    try:
+                        import platform
+                        if platform.system() == "Windows":
+                            # Force kill with taskkill on Windows
+                            import subprocess as sync_subprocess
+                            try:
+                                sync_subprocess.run(
+                                    ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                                    capture_output=True,
+                                    timeout=2.0
+                                )
+                            except Exception:
+                                process.kill()
+                        else:
+                            process.terminate()  # Try graceful first on Unix
+                            try:
+                                await asyncio.wait_for(process.wait(), timeout=0.5)
+                            except asyncio.TimeoutError:
+                                process.kill()  # Force kill if needed
+                        
+                        # Wait for process to actually die
+                        await process.wait()
+                    except ProcessLookupError:
+                        # Process already dead
+                        pass
+                raise
+            finally:
+                # Clear process reference
+                self._current_process = None
             
             duration = time.time() - start_time
             
