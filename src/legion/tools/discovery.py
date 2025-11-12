@@ -381,6 +381,7 @@ def discover_all_tools(
             "nmap",
             "hydra",
             "nikto",
+            "searchsploit",
             "sqlmap",
             "dirb",
             "gobuster",

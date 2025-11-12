@@ -5,16 +5,19 @@ This module provides various dialog windows for user interaction,
 including scan configuration, settings, and information displays.
 """
 
+from pathlib import Path
 from typing import Optional, Dict, Any
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QComboBox, QSpinBox, QCheckBox, QTextEdit,
     QPushButton, QLabel, QGroupBox, QDialogButtonBox,
     QProgressBar, QTableWidget, QTableWidgetItem, QHeaderView,
-    QTabWidget, QWidget
+    QTabWidget, QWidget, QRadioButton, QSlider, QSpacerItem, QSizePolicy,
+    QPlainTextEdit
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QT_VERSION_STR
+from PyQt6.QtGui import QFont, QIcon, QPixmap
+import sys
 
 
 class NewScanDialog(QDialog):
@@ -448,6 +451,82 @@ class AboutDialog(QDialog):
         
         tabs.addTab(credits_widget, "Credits")
         
+        # Version tab
+        version_widget = QWidget()
+        version_layout = QVBoxLayout(version_widget)
+        
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        version_label = QLabel(
+            "<h3>Version Information</h3>"
+            "<p><b>Legion Version:</b> 2.0.0-alpha5</p>"
+            "<p><b>Build:</b> Phase 5 - UI Migration</p>"
+            "<p><b>Last Update:</b> 12. November 2025</p>"
+            "<br>"
+            "<p><b>Using:</b></p>"
+            "<ul>"
+            f"<li>Python: {python_version}</li>"
+            f"<li>Qt Version: {QT_VERSION_STR}</li>"
+            "<li>PyQt6</li>"
+            "<li>qasync</li>"
+            "</ul>"
+        )
+        version_label.setWordWrap(True)
+        version_label.setTextFormat(Qt.TextFormat.RichText)
+        version_layout.addWidget(version_label)
+        version_layout.addStretch()
+        
+        tabs.addTab(version_widget, "Version")
+        
+        # Changelog tab
+        changelog_widget = QWidget()
+        changelog_layout = QVBoxLayout(changelog_widget)
+        
+        changelog_text = QPlainTextEdit()
+        changelog_text.setReadOnly(True)
+        
+        # Try to load CHANGELOG.txt from _old directory
+        changelog_path = Path(__file__).parent.parent.parent.parent / "_old" / "CHANGELOG.txt"
+        if changelog_path.exists():
+            try:
+                with open(changelog_path, 'r', encoding='utf-8') as f:
+                    changelog_text.setPlainText(f.read())
+            except Exception as e:
+                changelog_text.setPlainText(f"Error loading changelog: {e}")
+        else:
+            changelog_text.setPlainText(
+                "Changelog not available.\n\n"
+                "See docs/PHASE*_SUMMARY.md files for detailed change information."
+            )
+        
+        changelog_layout.addWidget(changelog_text)
+        tabs.addTab(changelog_widget, "Changelog")
+        
+        # License tab
+        license_widget = QWidget()
+        license_layout = QVBoxLayout(license_widget)
+        
+        license_text = QPlainTextEdit()
+        license_text.setReadOnly(True)
+        
+        # Try to load LICENSE file
+        license_path = Path(__file__).parent.parent.parent.parent / "LICENSE"
+        if license_path.exists():
+            try:
+                with open(license_path, 'r', encoding='utf-8') as f:
+                    license_text.setPlainText(f.read())
+            except Exception as e:
+                license_text.setPlainText(f"Error loading license: {e}")
+        else:
+            license_text.setPlainText(
+                "GNU GENERAL PUBLIC LICENSE\n"
+                "Version 3, 29 June 2007\n\n"
+                "License file not found. Please see:\n"
+                "https://www.gnu.org/licenses/gpl-3.0.en.html"
+            )
+        
+        license_layout.addWidget(license_text)
+        tabs.addTab(license_widget, "License")
+        
         layout.addWidget(tabs)
         
         # Close button
@@ -460,116 +539,364 @@ class AddHostDialog(QDialog):
     """
     Dialog for manually adding hosts to scan.
     
-    Allows users to add:
-    - Single IP addresses
-    - IP ranges (CIDR notation)
-    - Hostnames
-    - Multiple targets (one per line)
+    Enhanced version with Easy/Hard mode options:
+    - Easy Mode: Quick/Staged scan options with timing control
+    - Hard Mode: Detailed nmap options (scan types, ping types, fragmentation)
+    - Custom arguments support
+    - Validation for input
+    
+    Migrated from legacy ui/addHostDialog.py with modern improvements.
     """
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Add Host(s)")
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(400)
+        self.setWindowTitle("Add Host(s) to Scan")
+        self.setMinimumWidth(700)
+        self.setMinimumHeight(700)
+        self.setModal(True)
         self._setup_ui()
     
     def _setup_ui(self):
-        """Setup dialog UI."""
+        """Setup dialog UI with Easy/Hard modes."""
         layout = QVBoxLayout(self)
         
-        # Instructions
-        instructions = QLabel(
-            "Enter one or more targets to add to the scan.\n"
-            "Supports: IP addresses, CIDR ranges, hostnames.\n"
-            "One target per line."
-        )
-        instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: gray; margin-bottom: 10px;")
-        layout.addWidget(instructions)
+        # Target input section
+        target_layout = QHBoxLayout()
         
-        # Examples
-        examples = QLabel(
-            "Examples:\n"
-            "• 192.168.1.1\n"
-            "• 192.168.1.0/24\n"
-            "• 10.0.0.1-10\n"
-            "• example.com"
-        )
-        examples.setStyleSheet("font-family: monospace; font-size: 9pt; color: #666; margin-bottom: 10px;")
-        layout.addWidget(examples)
-        
-        # Target input
-        target_label = QLabel("Targets:")
-        target_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(target_label)
-        
-        self.target_input = QTextEdit()
+        target_label = QLabel("IP(s), Range(s), and Host(s)")
+        self.target_input = QPlainTextEdit()
         self.target_input.setPlaceholderText(
             "192.168.1.1\n"
             "10.0.0.0/24\n"
+            "192.168.1.10-20\n"
             "example.com"
         )
-        self.target_input.setAcceptRichText(False)
-        layout.addWidget(self.target_input)
+        self.target_input.setMaximumHeight(120)
         
-        # Scan options
-        options_group = QGroupBox("Scan Options")
-        options_layout = QVBoxLayout()
+        target_layout.addWidget(target_label)
+        target_layout.addWidget(self.target_input)
+        layout.addLayout(target_layout)
         
-        self.quick_scan = QCheckBox("Start quick scan immediately")
-        self.quick_scan.setChecked(True)
-        self.quick_scan.setToolTip("Start a quick scan (-F) after adding hosts")
-        options_layout.addWidget(self.quick_scan)
+        # Example label
+        example_label = QLabel("Ex: 192.168.1.0/24, 10.10.10.10-20; 1.2.3.4; bing.com (separate with comma, semicolon, or newline)")
+        example_label.setFont(QFont("Calibri", 10))
+        example_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(example_label)
         
-        self.service_detection = QCheckBox("Enable service detection (-sV)")
-        self.service_detection.setToolTip("Detect service versions on open ports")
-        options_layout.addWidget(self.service_detection)
+        # Validation label (hidden by default)
+        self.validation_label = QLabel("Invalid input. Please try again!")
+        self.validation_label.setStyleSheet("QLabel { color: red; }")
+        self.validation_label.hide()
+        layout.addWidget(self.validation_label)
         
-        options_group.setLayout(options_layout)
-        layout.addWidget(options_group)
+        layout.addSpacing(5)
+        
+        # Mode selection group
+        mode_group = QGroupBox("Mode Selection")
+        mode_layout = QHBoxLayout()
+        
+        self.easy_mode_radio = QRadioButton("Easy")
+        self.easy_mode_radio.setToolTip("Easy mode with preset options")
+        self.easy_mode_radio.setChecked(True)
+        
+        self.hard_mode_radio = QRadioButton("Hard")
+        self.hard_mode_radio.setToolTip("Hard mode with advanced nmap options")
+        
+        mode_layout.addWidget(self.easy_mode_radio)
+        mode_layout.addWidget(self.hard_mode_radio)
+        mode_group.setLayout(mode_layout)
+        layout.addWidget(mode_group)
+        
+        layout.addSpacing(5)
+        
+        # Easy mode options
+        self.easy_mode_group = QGroupBox("Easy Mode Options")
+        easy_layout = QHBoxLayout()
+        
+        self.discovery_check = QCheckBox("Run nmap host discovery")
+        self.discovery_check.setToolTip("Typical host discovery options")
+        self.discovery_check.setChecked(True)
+        
+        self.staged_scan_check = QCheckBox("Run staged nmap scan")
+        self.staged_scan_check.setToolTip("Scan ports in stages with typical options")
+        self.staged_scan_check.setChecked(True)
+        
+        easy_layout.addWidget(self.discovery_check)
+        easy_layout.addWidget(self.staged_scan_check)
+        self.easy_mode_group.setLayout(easy_layout)
+        layout.addWidget(self.easy_mode_group)
+        
+        layout.addSpacing(5)
+        
+        # Timing and performance options
+        timing_group = QGroupBox("Timing and Performance Options")
+        timing_vlayout = QVBoxLayout()
+        
+        # Slider
+        self.timing_slider = QSlider(Qt.Orientation.Horizontal)
+        self.timing_slider.setRange(0, 5)
+        self.timing_slider.setSingleStep(1)
+        self.timing_slider.setValue(4)
+        self.timing_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        timing_vlayout.addWidget(self.timing_slider)
+        
+        # Labels
+        labels_layout = QHBoxLayout()
+        timing_labels = [
+            ("Paranoid", "Serialize every scan operation with a 5 minute wait [-T0]"),
+            ("Sneaky", "Serialize with a 15 second wait [-T1]"),
+            ("Polite", "Serialize with a 0.4 second wait [-T2]"),
+            ("Normal", "NMAP defaults including parallelization [-T3]"),
+            ("Aggressive", "Fast scan with reduced timeouts [-T4]"),
+            ("Insane", "Very fast scan, may sacrifice accuracy [-T5]")
+        ]
+        
+        for text, tooltip in timing_labels:
+            label = QLabel(text)
+            label.setToolTip(tooltip)
+            label.setFont(QFont("Calibri", 8))
+            labels_layout.addWidget(label)
+        
+        timing_vlayout.addLayout(labels_layout)
+        timing_group.setLayout(timing_vlayout)
+        layout.addWidget(timing_group)
+        
+        layout.addSpacing(5)
+        
+        # Hard mode: Port scan options
+        self.scan_type_group = QGroupBox("Port Scan Options")
+        scan_type_layout = QHBoxLayout()
+        
+        self.tcp_connect_radio = QRadioButton("TCP")
+        self.tcp_connect_radio.setToolTip("TCP connect() scanning [-sT]")
+        
+        self.obfuscated_radio = QRadioButton("Obfuscated")
+        self.obfuscated_radio.setToolTip("Obfuscated scanning for avoiding detection")
+        self.obfuscated_radio.setChecked(True)
+        
+        self.fin_radio = QRadioButton("FIN")
+        self.fin_radio.setToolTip("FIN scanning [-sF]")
+        
+        self.null_radio = QRadioButton("NULL")
+        self.null_radio.setToolTip("Null scanning [-sN]")
+        
+        self.xmas_radio = QRadioButton("Xmas")
+        self.xmas_radio.setToolTip("Xmas Tree scanning [-sX]")
+        
+        self.tcp_ping_radio = QRadioButton("TCP Ping")
+        self.tcp_ping_radio.setToolTip("TCP Ping scanning [-sP]")
+        
+        self.udp_ping_radio = QRadioButton("UDP Ping")
+        self.udp_ping_radio.setToolTip("UDP Ping scanning [-sU]")
+        
+        self.fragmentation_check = QCheckBox("Fragment")
+        self.fragmentation_check.setToolTip("Enable packet fragmentation [-f]")
+        self.fragmentation_check.setChecked(True)
+        
+        scan_type_layout.addWidget(self.tcp_connect_radio)
+        scan_type_layout.addWidget(self.obfuscated_radio)
+        scan_type_layout.addWidget(self.fin_radio)
+        scan_type_layout.addWidget(self.null_radio)
+        scan_type_layout.addWidget(self.xmas_radio)
+        scan_type_layout.addWidget(self.tcp_ping_radio)
+        scan_type_layout.addWidget(self.udp_ping_radio)
+        scan_type_layout.addWidget(self.fragmentation_check)
+        
+        self.scan_type_group.setLayout(scan_type_layout)
+        self.scan_type_group.setEnabled(False)  # Disabled by default (Easy mode)
+        layout.addWidget(self.scan_type_group)
+        
+        layout.addSpacing(5)
+        
+        # Hard mode: Host discovery options
+        self.ping_type_group = QGroupBox("Host Discovery Options")
+        ping_type_layout = QHBoxLayout()
+        
+        self.ping_disable_radio = QRadioButton("Disable")
+        self.ping_disable_radio.setToolTip("Disable Ping entirely [-Pn]")
+        self.ping_disable_radio.setChecked(True)
+        
+        self.ping_default_radio = QRadioButton("Default")
+        self.ping_default_radio.setToolTip("ICMP Echo Request and TCP ping [-PB]")
+        
+        self.ping_icmp_radio = QRadioButton("ICMP")
+        self.ping_icmp_radio.setToolTip("Standard ICMP Echo Request [-PE]")
+        
+        self.ping_syn_radio = QRadioButton("TCP SYN")
+        self.ping_syn_radio.setToolTip("TCP Ping with SYN packets [-PS]")
+        
+        self.ping_ack_radio = QRadioButton("TCP ACK")
+        self.ping_ack_radio.setToolTip("TCP Ping with ACK packets [-PT]")
+        
+        self.ping_timestamp_radio = QRadioButton("Timestamp")
+        self.ping_timestamp_radio.setToolTip("ICMP Timestamp Request [-PP]")
+        
+        self.ping_netmask_radio = QRadioButton("Netmask")
+        self.ping_netmask_radio.setToolTip("ICMP Netmask Request [-PM]")
+        
+        ping_type_layout.addWidget(self.ping_disable_radio)
+        ping_type_layout.addWidget(self.ping_default_radio)
+        ping_type_layout.addWidget(self.ping_icmp_radio)
+        ping_type_layout.addWidget(self.ping_syn_radio)
+        ping_type_layout.addWidget(self.ping_ack_radio)
+        ping_type_layout.addWidget(self.ping_timestamp_radio)
+        ping_type_layout.addWidget(self.ping_netmask_radio)
+        
+        self.ping_type_group.setLayout(ping_type_layout)
+        self.ping_type_group.setEnabled(False)  # Disabled by default (Easy mode)
+        layout.addWidget(self.ping_type_group)
+        
+        layout.addSpacing(5)
+        
+        # Custom options
+        self.custom_group = QGroupBox("Custom Options")
+        custom_layout = QHBoxLayout()
+        
+        custom_label = QLabel("Additional arguments")
+        self.custom_args_input = QLineEdit()
+        self.custom_args_input.setPlaceholderText("e.g., -sV -O")
+        
+        custom_layout.addWidget(custom_label)
+        custom_layout.addWidget(self.custom_args_input)
+        
+        self.custom_group.setLayout(custom_layout)
+        self.custom_group.setEnabled(False)  # Disabled by default (Easy mode)
+        layout.addWidget(self.custom_group)
+        
+        layout.addSpacing(10)
         
         # Buttons
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | 
-            QDialogButtonBox.StandardButton.Cancel
-        )
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
+        button_layout = QHBoxLayout()
+        
+        self.submit_button = QPushButton("Submit")
+        self.submit_button.setMaximumSize(160, 70)
+        self.submit_button.setDefault(True)
+        
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setMaximumSize(110, 30)
+        
+        button_layout.addWidget(self.submit_button)
+        button_layout.addWidget(self.cancel_button)
+        layout.addLayout(button_layout)
+        
+        # Connect signals
+        self.easy_mode_radio.toggled.connect(self._on_mode_changed)
+        self.hard_mode_radio.toggled.connect(self._on_mode_changed)
+        self.submit_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+    
+    def _on_mode_changed(self):
+        """Handle mode change between Easy and Hard."""
+        is_easy = self.easy_mode_radio.isChecked()
+        
+        # Enable/disable appropriate groups
+        self.easy_mode_group.setEnabled(is_easy)
+        self.scan_type_group.setEnabled(not is_easy)
+        self.ping_type_group.setEnabled(not is_easy)
+        self.custom_group.setEnabled(not is_easy)
+    
+    def validate_input(self) -> bool:
+        """
+        Validate user input.
+        
+        Returns:
+            True if input is valid, False otherwise
+        """
+        targets = self.get_targets()
+        if not targets:
+            self.validation_label.setText("Please enter at least one target!")
+            self.validation_label.show()
+            return False
+        
+        self.validation_label.hide()
+        return True
     
     def get_targets(self) -> list[str]:
         """
         Get list of targets from input.
         
         Returns:
-            List of target strings (one per line, stripped)
+            List of target strings (cleaned and split)
         """
         text = self.target_input.toPlainText().strip()
         if not text:
             return []
         
-        # Split by lines, strip whitespace, remove empty lines
-        targets = [line.strip() for line in text.split('\n')]
-        return [t for t in targets if t]
+        # Split by commas, semicolons or newlines
+        targets = []
+        # First replace semicolons and commas with newlines for uniform splitting
+        text = text.replace(';', '\n').replace(',', '\n')
+        
+        for line in text.split('\n'):
+            line = line.strip()
+            if line:
+                targets.append(line)
+        
+        return targets
     
-    def should_scan(self) -> bool:
-        """Check if quick scan should be started."""
-        return self.quick_scan.isChecked()
+    def is_easy_mode(self) -> bool:
+        """Check if Easy mode is selected."""
+        return self.easy_mode_radio.isChecked()
     
     def get_scan_options(self) -> dict:
         """
         Get scan options from dialog.
         
         Returns:
-            Dictionary with scan options
+            Dictionary with all scan options
         """
         options = {
-            "timing": "4",  # Aggressive timing
+            "mode": "easy" if self.is_easy_mode() else "hard",
+            "timing": str(self.timing_slider.value()),
         }
         
-        if self.service_detection.isChecked():
-            options["version_detection"] = True
+        if self.is_easy_mode():
+            # Easy mode options
+            options["discovery"] = self.discovery_check.isChecked()
+            options["staged_scan"] = self.staged_scan_check.isChecked()
+        else:
+            # Hard mode options
+            options["custom_args"] = self.custom_args_input.text().strip()
+            
+            # Scan type
+            if self.tcp_connect_radio.isChecked():
+                options["scan_type"] = "tcp"
+            elif self.obfuscated_radio.isChecked():
+                options["scan_type"] = "obfuscated"
+            elif self.fin_radio.isChecked():
+                options["scan_type"] = "fin"
+            elif self.null_radio.isChecked():
+                options["scan_type"] = "null"
+            elif self.xmas_radio.isChecked():
+                options["scan_type"] = "xmas"
+            elif self.tcp_ping_radio.isChecked():
+                options["scan_type"] = "tcp_ping"
+            elif self.udp_ping_radio.isChecked():
+                options["scan_type"] = "udp_ping"
+            
+            options["fragmentation"] = self.fragmentation_check.isChecked()
+            
+            # Ping type
+            if self.ping_disable_radio.isChecked():
+                options["ping_type"] = "disable"
+            elif self.ping_default_radio.isChecked():
+                options["ping_type"] = "default"
+            elif self.ping_icmp_radio.isChecked():
+                options["ping_type"] = "icmp"
+            elif self.ping_syn_radio.isChecked():
+                options["ping_type"] = "syn"
+            elif self.ping_ack_radio.isChecked():
+                options["ping_type"] = "ack"
+            elif self.ping_timestamp_radio.isChecked():
+                options["ping_type"] = "timestamp"
+            elif self.ping_netmask_radio.isChecked():
+                options["ping_type"] = "netmask"
         
         return options
+    
+    def accept(self):
+        """Override accept to validate input first."""
+        if self.validate_input():
+            super().accept()
+
 

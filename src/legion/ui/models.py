@@ -23,7 +23,7 @@ class HostsTableModel(QAbstractTableModel):
     """
     Table model for displaying hosts from SimpleDatabase.
     
-    Columns: IP, Hostname, OS, State, Ports, Last Seen
+    Columns: IP, Hostname, OS, State, Ports, Progress, Last Seen
     """
     
     # Column definitions
@@ -32,9 +32,10 @@ class HostsTableModel(QAbstractTableModel):
     COL_OS = 2
     COL_STATE = 3
     COL_PORTS = 4
-    COL_LAST_SEEN = 5
+    COL_PROGRESS = 5
+    COL_LAST_SEEN = 6
     
-    HEADERS = ["IP Address", "Hostname", "Operating System", "State", "Open Ports", "Last Seen"]
+    HEADERS = ["IP Address", "Hostname", "Operating System", "State", "Open Ports", "Scan Progress", "Last Seen"]
     
     def __init__(self, database: SimpleDatabase, parent: Optional[Any] = None):
         """
@@ -47,7 +48,49 @@ class HostsTableModel(QAbstractTableModel):
         super().__init__(parent)
         self.database = database
         self._hosts: List[Host] = []
+        self._scan_progress: dict[str, tuple[str, int]] = {}  # ip -> (status, progress%)
         self.refresh()
+    
+    def set_scan_progress(self, host_ip: str, status: str, progress: int = 0) -> None:
+        """
+        Update scan progress for a host.
+        
+        Args:
+            host_ip: Host IP address
+            status: Status text (e.g., "Scanning...", "Complete", "Failed")
+            progress: Progress percentage (0-100)
+        """
+        self._scan_progress[host_ip] = (status, progress)
+        
+        # Find row for this host and emit dataChanged
+        for row, host in enumerate(self._hosts):
+            if host.ip == host_ip:
+                index = self.index(row, self.COL_PROGRESS)
+                self.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
+                break
+    
+    def clear_scan_progress(self, host_ip: str) -> None:
+        """Clear scan progress for a host."""
+        if host_ip in self._scan_progress:
+            del self._scan_progress[host_ip]
+            
+            # Update display
+            for row, host in enumerate(self._hosts):
+                if host.ip == host_ip:
+                    index = self.index(row, self.COL_PROGRESS)
+                    self.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
+                    break
+    
+    def clear_all_scan_progress(self) -> None:
+        """Clear all scan progress indicators."""
+        if self._scan_progress:
+            self._scan_progress.clear()
+            
+            # Update all progress columns (only if we have hosts)
+            if self._hosts:
+                top_left = self.index(0, self.COL_PROGRESS)
+                bottom_right = self.index(len(self._hosts) - 1, self.COL_PROGRESS)
+                self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DisplayRole])
     
     def refresh(self) -> None:
         """Reload hosts from database."""
@@ -102,6 +145,14 @@ class HostsTableModel(QAbstractTableModel):
                 ports = self.database.get_ports(host.ip)
                 open_count = sum(1 for p in ports if p.state == "open")
                 return str(open_count)
+            elif col == self.COL_PROGRESS:
+                # Show scan progress
+                if host.ip in self._scan_progress:
+                    status, progress = self._scan_progress[host.ip]
+                    if progress > 0:
+                        return f"{status} ({progress}%)"
+                    return status
+                return ""
             elif col == self.COL_LAST_SEEN:
                 if host.last_seen:
                     # Format datetime nicely
@@ -112,6 +163,18 @@ class HostsTableModel(QAbstractTableModel):
         
         # Background color role (color-code by state)
         elif role == Qt.ItemDataRole.BackgroundRole:
+            if col == self.COL_PROGRESS:
+                # Color-code progress column
+                if host.ip in self._scan_progress:
+                    status, progress = self._scan_progress[host.ip]
+                    if "Complete" in status or "Done" in status:
+                        return QColor(200, 255, 200)  # Light green
+                    elif "Failed" in status or "Error" in status:
+                        return QColor(255, 200, 200)  # Light red
+                    elif "Scanning" in status or "Running" in status:
+                        return QColor(255, 255, 200)  # Light yellow
+                return QVariant()
+            
             if host.state == "up":
                 return QColor(200, 255, 200)  # Light green
             elif host.state == "down":
@@ -119,6 +182,14 @@ class HostsTableModel(QAbstractTableModel):
         
         # Tooltip role
         elif role == Qt.ItemDataRole.ToolTipRole:
+            if col == self.COL_PROGRESS:
+                # Progress column tooltip
+                if host.ip in self._scan_progress:
+                    status, progress = self._scan_progress[host.ip]
+                    return f"Scan Status: {status}\nProgress: {progress}%"
+                return "No active scan"
+            
+            # General host tooltip
             tooltip = f"IP: {host.ip}\n"
             if host.hostname:
                 tooltip += f"Hostname: {host.hostname}\n"
@@ -130,6 +201,12 @@ class HostsTableModel(QAbstractTableModel):
                 tooltip += f"OS: {host.os_name}"
                 if host.os_accuracy:
                     tooltip += f" ({host.os_accuracy}%)"
+            
+            # Add scan progress to tooltip
+            if host.ip in self._scan_progress:
+                status, progress = self._scan_progress[host.ip]
+                tooltip += f"\n\nScan: {status} ({progress}%)"
+            
             return tooltip
         
         return QVariant()

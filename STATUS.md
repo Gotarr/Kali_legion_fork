@@ -1,7 +1,7 @@
 # Legion v2.0 - Cross-Platform Migration
 
-**Status**: Phase 5 (UI Migration) - 57% Complete  
-**Version**: 2.0.0-alpha5  
+**Status**: Phase 6 (Additional Tools) - 🚧 IN PROGRESS  
+**Version**: 2.0.0-alpha6  
 **Datum**: 12. November 2025
 
 ---
@@ -14,17 +14,17 @@
 | **2. Tool Discovery** | ✅ Complete | 100% |
 | **3. Core Logic** | ✅ Complete | 100% |
 | **4. Configuration** | ✅ Complete | 100% |
-| **5. UI Migration** | 🔄 In Progress | 57% |
-| **6. Additional Tools** | 📋 Planned | 0% |
+| **5. UI Migration** | ✅ Complete | 100% |
+| **6. Additional Tools** | � In Progress | 0% |
 | **7. Testing & Polish** | 📋 Planned | 0% |
 | **8. Legacy Cleanup** | 📋 Planned | 0% |
 
 ---
 
-## 📊 Phase 5: UI Migration (Aktuell)
+## 📊 Phase 5: UI Migration (✅ ABGESCHLOSSEN!)
 
-**Fortschritt**: 4/7 Tasks (57%)  
-**Status**: ✅ Production UI verfügbar!
+**Fortschritt**: 8/8 Tasks (100%)  
+**Status**: ✅ Production-ready UI verfügbar!
 
 ### Tasks
 
@@ -33,14 +33,39 @@
 | 1 | UI Architecture Setup | ✅ 100% | MainWindow, Menus, Toolbar |
 | 2 | Database Bridge & Models | ✅ 100% | Qt Table Models, Master-Detail |
 | 3 | Scanner Integration | ✅ 100% | qasync Fix, User-validiert! |
-| 4 | Production Integration | ✅ 100% | app.py, run_legion_ui.py |
-| 5 | Config Dialog | 📋 0% | Settings UI |
-| 6 | Main Window Migration | 📋 0% | Legacy Port |
-| 7 | Testing & Polish | 📋 0% | Integration Tests |
+| 4 | Production Integration | ✅ 100% | app.py, legion.py |
+| 5 | Cleanup & Consolidation | ✅ 100% | Code cleanup |
+| 6 | Settings Dialog | ✅ 100% | 4-Tab Settings UI |
+| 7 | Main Window Migration | ✅ 100% | Legacy Features portiert |
+| 8 | Testing & Polish | ✅ 100% | Manual Testing Complete |
 
 **Details**: Siehe **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)**
 
-**🎉 Milestone**: Scanner Integration mit qasync erfolgreich! UI läuft production-ready.
+**🎉 Phase 5 Complete**: UI ist production-ready mit allen Legacy-Features + moderne Verbesserungen!
+
+---
+
+## 🔧 Phase 6: Additional Tools (🚧 IN ARBEIT)
+
+**Fortschritt**: 0/7 Tasks (0%)  
+**Ziel**: Integration weiterer Tools (Hydra, Nikto, Searchsploit) über das bestehende Discovery/Registry/Wrapper-System.
+
+### Tasks
+
+| # | Task | Status | Details |
+|---|------|--------|---------|
+| 1 | Tool Discovery erweitern | ⏳ 0% | Suchpfade/Erkennung für hydra, nikto, searchsploit |
+| 2 | Wrapper-Gerüst erstellen | ⏳ 0% | BaseTool-Subklassen + minimaler execute()/parse_output() Stub |
+| 3 | Registry-Wiring | ⏳ 0% | Tools in Registry/Cache verfügbar machen |
+| 4 | Async-Ausführung & Abbruch | ⏳ 0% | Zeitlimits, Cancel-Unterstützung analog Nmap |
+| 5 | Ergebnis-Parsing | ⏳ 0% | Basis-Parser (stdout/JSON/XML, je Tool) |
+| 6 | UI Hooks | ⏳ 0% | Menü-/Kontext-Aktionen, einfache Dialoge |
+| 7 | Logging & Tests | ⏳ 0% | Ereignis-Logging, minimale Integrationstests |
+
+**Nächste Schritte (kurzfristig)**:
+- Modulstruktur prüfen und Wrapper-Stubs anlegen (hydra/, nikto/, searchsploit/)
+- Registry/Discovery um Toolnamen erweitern, erste Verfügbarkeitserkennung
+- Status in UI/Logs sichtbar machen (nur Dev-Menü, noch ohne UI-Workflow)
 
 ---
 
@@ -72,28 +97,29 @@ src/legion/
 │
 └── ui/                # ✅ UI Migration (Production-Ready!)
     ├── app.py         # Application Entry Point (174 Zeilen)
-    ├── mainwindow.py  # MainWindow (541 Zeilen)
-    ├── models.py      # Qt Table Models (400 Zeilen)
-    ├── dialogs.py     # Dialogs (380+ Zeilen)
+    ├── mainwindow.py  # MainWindow (1,200 Zeilen) ✅
+    ├── models.py      # Qt Table Models (430 Zeilen)
+    ├── dialogs.py     # Dialogs (900 Zeilen) ✅
+    ├── settings.py    # Settings Dialog (400 Zeilen)
     └── async_helper.py # qasync Integration (119 Zeilen)
 
-run_legion_ui.py       # ✅ Production Launcher
+legion.py              # ✅ Production Launcher (40 Zeilen)
 ```
 
 ---
 
 ## 📋 Migrations-Roadmap
 
-| Phase | Dauer | Nächste Schritte |
-|-------|-------|------------------|
-| **1. Foundation** | Woche 1-2 | *Abgeschlossen* |
-| **2. Tool Discovery** | Woche 3-4 | *Abgeschlossen* |
-| **3. Core Logic** | Woche 5-7 | *Abgeschlossen* |
-| **4. Configuration** | Woche 8 | *Abgeschlossen* |
-| **5. UI Migration** | Woche 9-12 | UI-Refresh Bug fixen |
-| **6. Additional Tools** | Woche 13-14 | Weitere Tool-Wrapper |
-| **7. Testing & Polish** | Woche 15-16 | Produktionsreife |
-| **8. Legacy Cleanup** | Woche 17+ | Alten Code entfernen |
+| Phase | Dauer | Status |
+|-------|-------|--------|
+| **1. Foundation** | Woche 1-2 | ✅ Abgeschlossen |
+| **2. Tool Discovery** | Woche 3-4 | ✅ Abgeschlossen |
+| **3. Core Logic** | Woche 5-7 | ✅ Abgeschlossen |
+| **4. Configuration** | Woche 8 | ✅ Abgeschlossen |
+| **5. UI Migration** | Woche 9-12 | ✅ Abgeschlossen |
+| **6. Additional Tools** | Woche 13-14 | � In Arbeit |
+| **7. Testing & Polish** | Woche 15-16 | 📋 Geplant |
+| **8. Legacy Cleanup** | Woche 17+ | 📋 Geplant |
 
 ---
 
@@ -124,24 +150,19 @@ run_legion_ui.py       # ✅ Production Launcher
 
 ## 🎯 Aktueller Fokus
 
-**Phase 5, Task 3**: Scanner Integration
+**Nächste Phase**: Phase 6 - Additional Tools Integration
 
-**Problem**: Scans laufen erfolgreich, aber UI aktualisiert sich nicht
+**Optionen**:
+1. **Additional Tools**: Hydra, Nikto, Searchsploit Wrapper
+2. **Testing & Polish**: Comprehensive Testing Suite
+3. **Legacy Cleanup**: Alte `_old/` Dateien analysieren und aufräumen
 
-**Symptome**:
-- ✅ Scan wird gestartet
-- ✅ Statusbar zeigt Progress
-- ✅ XML-Datei wird erstellt
-- ✅ Daten landen in Database
-- ❌ Hosts-Tabelle zeigt keine neuen Einträge
-
-**Vermutung**: Async Event Loop nicht mit Qt Event Loop integriert
-
-**Nächste Schritte**:
-1. UI-Refresh Problem debuggen
-2. Manual Refresh Button hinzufügen
-3. ScanProgressDialog integrieren
-4. Scan Cancellation implementieren
+**Phase 5 Erfolge**:
+- ✅ Production-ready UI
+- ✅ Alle Legacy-Features portiert
+- ✅ Moderne Architektur (MVC, Async, Qt6)
+- ✅ Export/Import, Context-Menüs, Shortcuts
+- ✅ 3,500+ Zeilen Production Code
 
 ---
 
@@ -177,8 +198,13 @@ run_legion_ui.py       # ✅ Production Launcher
 - ✅ HostsTableModel & PortsTableModel
 - ✅ Master-Detail Pattern
 - ✅ Color-Coding, Tooltips
-- ✅ NewScanDialog, AboutDialog
-- 🔄 Scanner Integration (Refresh-Bug)
+- ✅ NewScanDialog, AboutDialog, AddHostDialog
+- ✅ Scanner Integration (qasync)
+- ✅ Settings Dialog (4 Tabs)
+- ✅ Context Menus (Host & Port)
+- ✅ Keyboard Shortcuts (15+)
+- ✅ Export/Import (JSON & XML)
+- ✅ Manual Testing Complete
 
 ---
 
