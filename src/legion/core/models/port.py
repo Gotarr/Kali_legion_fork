@@ -74,6 +74,9 @@ class Port:
     last_seen: datetime = field(default_factory=datetime.now)
     """Last seen timestamp."""
     
+    previous_state: Optional[str] = None
+    """Previous state (for tracking changes)."""
+    
     notes: str = ""
     """Additional notes."""
     
@@ -132,3 +135,42 @@ class Port:
     def update_last_seen(self) -> None:
         """Update last seen timestamp to now."""
         self.last_seen = datetime.now()
+    
+    @property
+    def status_change(self) -> str:
+        """
+        Get status change indicator.
+        
+        Returns:
+            "new_open": Port newly opened
+            "new_closed": Port newly closed
+            "still_open": Port remains open
+            "still_closed": Port remains closed
+            "none": No previous state
+        """
+        if self.previous_state is None:
+            return "none"
+        
+        current = self.state.lower()
+        previous = self.previous_state.lower()
+        
+        if previous != "open" and current == "open":
+            return "new_open"
+        elif previous == "open" and current != "open":
+            return "new_closed"
+        elif current == "open":
+            return "still_open"
+        else:
+            return "still_closed"
+    
+    @property
+    def status_icon(self) -> str:
+        """Get emoji icon for status change."""
+        icons = {
+            "new_open": "🟢",
+            "new_closed": "🔴",
+            "still_open": "⚪",
+            "still_closed": "⚫",
+            "none": "🆕"
+        }
+        return icons.get(self.status_change, "❓")

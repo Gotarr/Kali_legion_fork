@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QComboBox, QSpinBox, QCheckBox, QTextEdit,
     QPushButton, QLabel, QGroupBox, QDialogButtonBox,
-    QProgressBar, QTableWidget, QTableWidgetItem, QHeaderView
+    QProgressBar, QTableWidget, QTableWidgetItem, QHeaderView,
+    QTabWidget, QWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -135,9 +136,17 @@ class NewScanDialog(QDialog):
         }
         self.scan_description.setText(descriptions.get(scan_type, ""))
         
-        # Enable/disable options based on scan type
-        is_custom = "Custom" in scan_type
-        self.port_range.setEnabled(is_custom or "Full" in scan_type)
+        # Enable port range for scans that support it
+        # Quick Scan (-F) uses predefined top 100 ports, incompatible with custom ports
+        # Full Scan (-p-) scans all ports by default but can be overridden
+        # Custom scan allows full configuration
+        supports_port_override = ("Custom" in scan_type or 
+                                  "Full" in scan_type or 
+                                  "Stealth" in scan_type or
+                                  "Service" in scan_type or
+                                  "OS" in scan_type or
+                                  "Aggressive" in scan_type)
+        self.port_range.setEnabled(supports_port_override)
     
     def _on_accept(self):
         """Handle OK button click."""
@@ -310,57 +319,248 @@ class ScanProgressDialog(QDialog):
 
 
 class AboutDialog(QDialog):
-    """About Legion dialog."""
+    """About Legion dialog with tabs for different information."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("About Legion")
-        self.setFixedSize(400, 300)
+        self.setMinimumSize(500, 400)
         self._setup_ui()
     
     def _setup_ui(self):
         """Setup dialog UI."""
         layout = QVBoxLayout(self)
         
-        # Title
+        # Header
+        header_layout = QHBoxLayout()
+        
+        # Title section
+        title_layout = QVBoxLayout()
         title = QLabel("Legion v2.0")
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        title_layout.addWidget(title)
         
-        # Subtitle
         subtitle = QLabel("Network Penetration Testing Tool")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: gray;")
-        layout.addWidget(subtitle)
+        title_layout.addWidget(subtitle)
         
-        layout.addSpacing(20)
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
         
-        # Description
+        layout.addLayout(header_layout)
+        layout.addSpacing(10)
+        
+        # Tab widget
+        tabs = QTabWidget()
+        
+        # About tab
+        about_widget = QWidget()
+        about_layout = QVBoxLayout(about_widget)
+        
         description = QLabel(
-            "Legion is a cross-platform network penetration testing framework "
-            "built with Python and PyQt6.\n\n"
-            "Features:\n"
-            "• Network scanning with nmap\n"
-            "• Service enumeration\n"
-            "• Automated vulnerability detection\n"
-            "• Cross-platform support (Windows & Linux)"
+            "<h3>About</h3>"
+            "<p>Legion is a cross-platform network penetration testing framework "
+            "built with Python and PyQt6.</p>"
+            "<p><b>Key Features:</b></p>"
+            "<ul>"
+            "<li>Network scanning with nmap</li>"
+            "<li>Service enumeration and detection</li>"
+            "<li>Port history tracking</li>"
+            "<li>Automated vulnerability detection</li>"
+            "<li>Cross-platform support (Windows & Linux)</li>"
+            "<li>Modern Qt-based interface</li>"
+            "</ul>"
         )
         description.setWordWrap(True)
-        layout.addWidget(description)
+        description.setTextFormat(Qt.TextFormat.RichText)
+        about_layout.addWidget(description)
+        about_layout.addStretch()
         
-        layout.addStretch()
+        tabs.addTab(about_widget, "About")
         
-        # Copyright
-        copyright_label = QLabel("© 2025 Gotham Security")
-        copyright_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        copyright_label.setStyleSheet("color: gray; font-size: 9pt;")
-        layout.addWidget(copyright_label)
+        # Keyboard Shortcuts tab
+        shortcuts_widget = QWidget()
+        shortcuts_layout = QVBoxLayout(shortcuts_widget)
+        
+        shortcuts_label = QLabel(
+            "<h3>Keyboard Shortcuts</h3>"
+            "<table cellpadding='5'>"
+            "<tr><td><b>Ctrl+N</b></td><td>New Project</td></tr>"
+            "<tr><td><b>Ctrl+O</b></td><td>Open Project</td></tr>"
+            "<tr><td><b>Ctrl+Shift+N</b></td><td>New Scan</td></tr>"
+            "<tr><td><b>Ctrl+H</b></td><td>Add Host(s)</td></tr>"
+            "<tr><td><b>Ctrl+Shift+D</b></td><td>Clear All Data</td></tr>"
+            "<tr><td><b>Ctrl+,</b></td><td>Settings</td></tr>"
+            "<tr><td><b>Ctrl+Q</b></td><td>Exit</td></tr>"
+            "<tr><td><b>F1</b></td><td>Help</td></tr>"
+            "</table>"
+            "<p style='margin-top: 15px;'><b>Context Menus:</b></p>"
+            "<ul>"
+            "<li>Right-click on host: Rescan options</li>"
+            "<li>Right-click on port: Rescan port</li>"
+            "</ul>"
+        )
+        shortcuts_label.setWordWrap(True)
+        shortcuts_label.setTextFormat(Qt.TextFormat.RichText)
+        shortcuts_layout.addWidget(shortcuts_label)
+        shortcuts_layout.addStretch()
+        
+        tabs.addTab(shortcuts_widget, "Shortcuts")
+        
+        # Credits tab
+        credits_widget = QWidget()
+        credits_layout = QVBoxLayout(credits_widget)
+        
+        credits_label = QLabel(
+            "<h3>Credits</h3>"
+            "<p><b>Original Legion:</b><br>"
+            "© 2023 Gotham Security<br>"
+            "<a href='https://gotham-security.com'>https://gotham-security.com</a></p>"
+            "<p><b>Modernized by:</b><br>"
+            "Community Contributors</p>"
+            "<p><b>Built with:</b></p>"
+            "<ul>"
+            "<li>Python 3.10+</li>"
+            "<li>PyQt6 - GUI Framework</li>"
+            "<li>qasync - Async/Await for Qt</li>"
+            "<li>nmap - Network Scanner</li>"
+            "</ul>"
+            "<p><b>License:</b><br>"
+            "GNU General Public License v3.0</p>"
+        )
+        credits_label.setWordWrap(True)
+        credits_label.setTextFormat(Qt.TextFormat.RichText)
+        credits_label.setOpenExternalLinks(True)
+        credits_layout.addWidget(credits_label)
+        credits_layout.addStretch()
+        
+        tabs.addTab(credits_widget, "Credits")
+        
+        layout.addWidget(tabs)
         
         # Close button
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
+
+
+class AddHostDialog(QDialog):
+    """
+    Dialog for manually adding hosts to scan.
+    
+    Allows users to add:
+    - Single IP addresses
+    - IP ranges (CIDR notation)
+    - Hostnames
+    - Multiple targets (one per line)
+    """
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Host(s)")
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(400)
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        """Setup dialog UI."""
+        layout = QVBoxLayout(self)
+        
+        # Instructions
+        instructions = QLabel(
+            "Enter one or more targets to add to the scan.\n"
+            "Supports: IP addresses, CIDR ranges, hostnames.\n"
+            "One target per line."
+        )
+        instructions.setWordWrap(True)
+        instructions.setStyleSheet("color: gray; margin-bottom: 10px;")
+        layout.addWidget(instructions)
+        
+        # Examples
+        examples = QLabel(
+            "Examples:\n"
+            "• 192.168.1.1\n"
+            "• 192.168.1.0/24\n"
+            "• 10.0.0.1-10\n"
+            "• example.com"
+        )
+        examples.setStyleSheet("font-family: monospace; font-size: 9pt; color: #666; margin-bottom: 10px;")
+        layout.addWidget(examples)
+        
+        # Target input
+        target_label = QLabel("Targets:")
+        target_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(target_label)
+        
+        self.target_input = QTextEdit()
+        self.target_input.setPlaceholderText(
+            "192.168.1.1\n"
+            "10.0.0.0/24\n"
+            "example.com"
+        )
+        self.target_input.setAcceptRichText(False)
+        layout.addWidget(self.target_input)
+        
+        # Scan options
+        options_group = QGroupBox("Scan Options")
+        options_layout = QVBoxLayout()
+        
+        self.quick_scan = QCheckBox("Start quick scan immediately")
+        self.quick_scan.setChecked(True)
+        self.quick_scan.setToolTip("Start a quick scan (-F) after adding hosts")
+        options_layout.addWidget(self.quick_scan)
+        
+        self.service_detection = QCheckBox("Enable service detection (-sV)")
+        self.service_detection.setToolTip("Detect service versions on open ports")
+        options_layout.addWidget(self.service_detection)
+        
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
+        
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | 
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+    
+    def get_targets(self) -> list[str]:
+        """
+        Get list of targets from input.
+        
+        Returns:
+            List of target strings (one per line, stripped)
+        """
+        text = self.target_input.toPlainText().strip()
+        if not text:
+            return []
+        
+        # Split by lines, strip whitespace, remove empty lines
+        targets = [line.strip() for line in text.split('\n')]
+        return [t for t in targets if t]
+    
+    def should_scan(self) -> bool:
+        """Check if quick scan should be started."""
+        return self.quick_scan.isChecked()
+    
+    def get_scan_options(self) -> dict:
+        """
+        Get scan options from dialog.
+        
+        Returns:
+            Dictionary with scan options
+        """
+        options = {
+            "timing": "4",  # Aggressive timing
+        }
+        
+        if self.service_detection.isChecked():
+            options["version_detection"] = True
+        
+        return options
+

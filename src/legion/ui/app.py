@@ -94,9 +94,11 @@ class LegionApplication:
     
     async def start_async_components(self) -> None:
         """Start async components (scanner workers)."""
-        logger.info("Starting scanner workers...")
-        await self.scanner.start()
-        logger.info("Scanner workers started")
+        logger.info("Scanner ready (workers will start on first scan)")
+        # Don't start workers yet - they'll start when first scan is queued
+        # This prevents the "NoneType has no attribute 'create_future'" errors
+        # await self.scanner.start()
+        pass
     
     def create_main_window(self) -> None:
         """Create and show main window."""

@@ -21,7 +21,7 @@ from legion.config import get_config, ConfigManager
 from legion.core.database import SimpleDatabase
 from legion.core.scanner import ScanManager, ScanJob
 from legion.ui.models import HostsTableModel, PortsTableModel
-from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog
+from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog, AddHostDialog
 from legion.ui.settings import SettingsDialog
 
 logger = logging.getLogger(__name__)
@@ -162,6 +162,9 @@ class MainWindow(QMainWindow):
         self.hosts_table.setSortingEnabled(True)
         self.hosts_table.horizontalHeader().setStretchLastSection(True)
         self.hosts_table.selectionModel().selectionChanged.connect(self._on_host_selected)
+        self.hosts_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.hosts_table.customContextMenuRequested.connect(self._show_host_context_menu)
+        self.hosts_table.doubleClicked.connect(self._on_host_double_clicked)
         self.left_layout.addWidget(self.hosts_table)
         
         # Right panel: Services/Ports view
@@ -181,6 +184,9 @@ class MainWindow(QMainWindow):
         self.ports_table.setAlternatingRowColors(True)
         self.ports_table.setSortingEnabled(True)
         self.ports_table.horizontalHeader().setStretchLastSection(True)
+        self.ports_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.ports_table.customContextMenuRequested.connect(self._show_port_context_menu)
+        self.ports_table.doubleClicked.connect(self._on_port_double_clicked)
         self.right_layout.addWidget(self.ports_table)
         
         # Set splitter sizes (60/40 split)
@@ -226,6 +232,14 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
+        # Clear All Data
+        clear_action = QtGui.QAction("&Clear All Data", self)
+        clear_action.setShortcut("Ctrl+Shift+D")
+        clear_action.triggered.connect(self._on_clear_data)
+        file_menu.addAction(clear_action)
+        
+        file_menu.addSeparator()
+        
         # Settings
         settings_action = QtGui.QAction("&Settings", self)
         settings_action.setShortcut("Ctrl+,")
@@ -249,6 +263,12 @@ class MainWindow(QMainWindow):
         scan_action.triggered.connect(self._on_new_scan)
         scan_menu.addAction(scan_action)
         
+        # Add Host(s)
+        add_host_action = QtGui.QAction("&Add Host(s)", self)
+        add_host_action.setShortcut("Ctrl+H")
+        add_host_action.triggered.connect(self._on_add_hosts)
+        scan_menu.addAction(add_host_action)
+        
         # View menu
         view_menu = menubar.addMenu("&View")
         
@@ -267,6 +287,15 @@ class MainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
+        # Keyboard Shortcuts
+        shortcuts_action = QtGui.QAction("&Keyboard Shortcuts", self)
+        shortcuts_action.setShortcut("F1")
+        shortcuts_action.triggered.connect(lambda: self._on_about(tab=1))
+        help_menu.addAction(shortcuts_action)
+        
+        help_menu.addSeparator()
+        
+        # About
         about_action = QtGui.QAction("&About Legion", self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
@@ -437,11 +466,101 @@ class MainWindow(QMainWindow):
         # TODO: Implement project open dialog (Phase 5.2)
         QMessageBox.information(self, "Open Project", "Open Project dialog (TODO)")
     
+    def _on_add_hosts(self) -> None:
+        """Handle Add Host(s) action."""
+        dialog = AddHostDialog(self)
+        
+        if dialog.exec() == AddHostDialog.DialogCode.Accepted:
+            targets = dialog.get_targets()
+            
+            if not targets:
+                QMessageBox.warning(
+                    self,
+                    "No Targets",
+                    "Please enter at least one target."
+                )
+                return
+            
+            # Check if we should scan immediately
+            if dialog.should_scan():
+                options = dialog.get_scan_options()
+                
+                # Queue quick scans for all targets
+                for target in targets:
+                    self._queue_scan_async(target, "quick", options)
+                
+                self.status_label.setText(
+                    f"Started quick scan for {len(targets)} target(s)"
+                )
+                
+                logger.info(f"Added and scanning {len(targets)} hosts: {', '.join(targets)}")
+            else:
+                # Just add to database without scanning
+                from legion.core.models import Host
+                for target in targets:
+                    host = Host(ip=target, state="unknown")
+                    self.database.save_host(host)
+                
+                self.refresh_data()
+                self.status_label.setText(
+                    f"Added {len(targets)} host(s) - no scan started"
+                )
+                
+                logger.info(f"Added {len(targets)} hosts without scanning: {', '.join(targets)}")
+    
     def _on_settings(self) -> None:
         """Handle Settings action."""
         dialog = SettingsDialog(self.config_manager, self)
         dialog.settings_changed.connect(self._on_settings_changed)
         dialog.exec()
+    
+    def _on_clear_data(self) -> None:
+        """Handle Clear All Data action."""
+        # Confirmation dialog
+        reply = QMessageBox.question(
+            self,
+            "Clear All Data",
+            "This will delete all hosts, ports, and services from the current session.\n\n"
+            "⚠️  This action cannot be undone!\n\n"
+            "Historical data in other projects will be preserved.\n\n"
+            "Are you sure you want to continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Clear database
+                logger.info("Clearing all data from database...")
+                
+                # Get all hosts
+                hosts = self.database.get_all_hosts()
+                
+                # Delete each host (cascade deletes ports)
+                for host in hosts:
+                    self.database.delete_host(host.ip)
+                
+                # Refresh UI
+                self.refresh_data()
+                
+                # Update status
+                self.status_label.setText("All data cleared")
+                
+                logger.info(f"Cleared {len(hosts)} hosts and their associated data")
+                
+                QMessageBox.information(
+                    self,
+                    "Data Cleared",
+                    f"Successfully cleared {len(hosts)} hosts and all associated ports/services."
+                )
+                
+            except Exception as e:
+                logger.error(f"Failed to clear data: {e}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to clear data:\n{e}"
+                )
     
     def _on_new_scan(self) -> None:
         """Handle New Scan action."""
@@ -460,31 +579,31 @@ class MainWindow(QMainWindow):
     
     def _queue_scan_async(self, target: str, scan_type: str, options: dict) -> None:
         """
-        Queue a scan asynchronously.
+        Queue a scan asynchronously using qasync event loop.
         
         Args:
             target: Scan target
             scan_type: Type of scan
             options: Scan options
         """
-        # Create new event loop if needed
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # Get qasync event loop (already set by app.py)
+        loop = asyncio.get_event_loop()
         
         # Queue scan
         async def queue_scan():
-            job_id = await self.scanner.queue_scan(target, scan_type, **options)
-            logger.info(f"Scan queued: {job_id}")
-            
-            # Start scanner workers if not running
-            if not self.scanner._running:
-                await self.scanner.start()
+            try:
+                job_id = await self.scanner.queue_scan(target, scan_type, **options)
+                logger.info(f"Scan queued: {job_id}")
+                
+                # Start scanner workers if not running
+                if not self.scanner._running:
+                    await self.scanner.start()
+            except Exception as e:
+                logger.error(f"Failed to queue scan: {e}", exc_info=True)
+                self.status_label.setText(f"Failed to queue scan: {e}")
         
-        # Run in event loop
-        loop.create_task(queue_scan())
+        # Schedule coroutine in qasync event loop
+        asyncio.ensure_future(queue_scan(), loop=loop)
     
     def _on_theme_change(self, theme: str) -> None:
         """
@@ -521,6 +640,194 @@ class MainWindow(QMainWindow):
         """Show About dialog."""
         dialog = AboutDialog(self)
         dialog.exec()
+    
+    def _show_host_context_menu(self, position: QtCore.QPoint) -> None:
+        """
+        Show context menu for host table.
+        
+        Args:
+            position: Mouse position in widget coordinates
+        """
+        # Get selected host
+        indexes = self.hosts_table.selectionModel().selectedRows()
+        if not indexes:
+            return
+        
+        row = indexes[0].row()
+        host_ip = self.hosts_model.data(
+            self.hosts_model.index(row, self.hosts_model.COL_IP),
+            Qt.ItemDataRole.DisplayRole
+        )
+        
+        # Get open ports for this host
+        ports = self.database.get_open_ports(host_ip)
+        port_numbers = [str(p.number) for p in ports]
+        
+        # Create context menu
+        menu = QtWidgets.QMenu(self.hosts_table)
+        
+        # Rescan with found ports
+        if port_numbers:
+            ports_str = ",".join(port_numbers)
+            port_count = len(port_numbers)
+            rescan_action = menu.addAction(f"🔄 Rescan with found ports ({port_count} ports)")
+            rescan_action.triggered.connect(
+                lambda: self._rescan_host_with_ports(host_ip, ports_str)
+            )
+        else:
+            no_ports_action = menu.addAction("No open ports found")
+            no_ports_action.setEnabled(False)
+        
+        menu.addSeparator()
+        
+        # Full rescan (all ports)
+        full_scan_action = menu.addAction("🔍 Full scan (all 65535 ports)")
+        full_scan_action.triggered.connect(
+            lambda: self._rescan_host_full(host_ip)
+        )
+        
+        # Show menu at cursor position
+        menu.exec(self.hosts_table.viewport().mapToGlobal(position))
+    
+    def _show_port_context_menu(self, position: QtCore.QPoint) -> None:
+        """
+        Show context menu for port table.
+        
+        Args:
+            position: Mouse position in widget coordinates
+        """
+        # Get selected port
+        indexes = self.ports_table.selectionModel().selectedRows()
+        if not indexes:
+            return
+        
+        row = indexes[0].row()
+        port_number = self.ports_model.data(
+            self.ports_model.index(row, self.ports_model.COL_PORT),
+            Qt.ItemDataRole.DisplayRole
+        )
+        
+        # Get current host
+        if not self.ports_model._current_host:
+            return
+        
+        host_ip = self.ports_model._current_host
+        
+        # Create context menu
+        menu = QtWidgets.QMenu(self.ports_table)
+        
+        # Rescan this port
+        rescan_action = menu.addAction(f"🔄 Rescan port {port_number}")
+        rescan_action.triggered.connect(
+            lambda: self._rescan_host_with_ports(host_ip, str(port_number))
+        )
+        
+        # Show menu at cursor position
+        menu.exec(self.ports_table.viewport().mapToGlobal(position))
+    
+    def _rescan_host_with_ports(self, host_ip: str, ports: str) -> None:
+        """
+        Rescan a host with specific ports.
+        
+        Args:
+            host_ip: Host IP address
+            ports: Comma-separated port numbers
+        """
+        logger.info(f"Rescanning {host_ip} with ports: {ports}")
+        
+        # Queue custom scan with specified ports
+        options = {
+            "ports": ports,
+            "timing": "4",  # Aggressive timing
+            "version_detection": True  # Enable service detection
+        }
+        
+        self._queue_scan_async(host_ip, "custom", options)
+        self.status_label.setText(f"Rescanning {host_ip} ports {ports}...")
+    
+    def _rescan_host_full(self, host_ip: str) -> None:
+        """
+        Full rescan of a host (all ports).
+        
+        Args:
+            host_ip: Host IP address
+        """
+        logger.info(f"Full rescan of {host_ip}")
+        
+        # Queue full scan
+        options = {
+            "timing": "4",
+            "version_detection": True
+        }
+        
+        self._queue_scan_async(host_ip, "full", options)
+        self.status_label.setText(f"Full scan of {host_ip} started...")
+    
+    def _on_host_double_clicked(self, index: QtCore.QModelIndex) -> None:
+        """
+        Handle double-click on host table.
+        
+        Quick action: Rescan host with found ports.
+        
+        Args:
+            index: Model index of double-clicked item
+        """
+        if not index.isValid():
+            return
+        
+        row = index.row()
+        host_ip = self.hosts_model.data(
+            self.hosts_model.index(row, self.hosts_model.COL_IP),
+            Qt.ItemDataRole.DisplayRole
+        )
+        
+        # Get open ports
+        ports = self.database.get_open_ports(host_ip)
+        
+        if ports:
+            # Rescan with found ports
+            port_numbers = [str(p.number) for p in ports]
+            ports_str = ",".join(port_numbers)
+            self._rescan_host_with_ports(host_ip, ports_str)
+        else:
+            # No ports found - offer quick scan
+            reply = QMessageBox.question(
+                self,
+                "No Open Ports",
+                f"No open ports found for {host_ip}.\n\n"
+                "Would you like to run a quick scan?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                options = {"timing": "4"}
+                self._queue_scan_async(host_ip, "quick", options)
+    
+    def _on_port_double_clicked(self, index: QtCore.QModelIndex) -> None:
+        """
+        Handle double-click on port table.
+        
+        Quick action: Rescan this specific port.
+        
+        Args:
+            index: Model index of double-clicked item
+        """
+        if not index.isValid():
+            return
+        
+        row = index.row()
+        port_number = self.ports_model.data(
+            self.ports_model.index(row, self.ports_model.COL_PORT),
+            Qt.ItemDataRole.DisplayRole
+        )
+        
+        if not self.ports_model._current_host:
+            return
+        
+        host_ip = self.ports_model._current_host
+        
+        # Rescan this port
+        self._rescan_host_with_ports(host_ip, str(port_number))
     
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """

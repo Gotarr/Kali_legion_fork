@@ -306,8 +306,11 @@ class ScanManager:
                 self._queue.task_done()
             except asyncio.TimeoutError:
                 continue
+            except asyncio.CancelledError:
+                # Worker cancelled, exit gracefully
+                break
             except Exception as e:
-                print(f"Worker error: {e}")
+                logger.error(f"Worker error: {e}", exc_info=True)
     
     async def start(self, num_workers: Optional[int] = None) -> None:
         """

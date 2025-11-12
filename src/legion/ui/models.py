@@ -187,8 +187,9 @@ class PortsTableModel(QAbstractTableModel):
     COL_STATE = 2
     COL_SERVICE = 3
     COL_VERSION = 4
+    COL_STATUS = 5
     
-    HEADERS = ["Port", "Protocol", "State", "Service", "Version"]
+    HEADERS = ["Port", "Protocol", "State", "Service", "Version", "Status"]
     
     def __init__(self, database: SimpleDatabase, parent: Optional[Any] = None):
         """
@@ -269,11 +270,31 @@ class PortsTableModel(QAbstractTableModel):
                 if port.service_version:
                     parts.append(port.service_version)
                 return " ".join(parts)
+            elif col == self.COL_STATUS:
+                # Show status change with icon and text
+                change = port.status_change
+                labels = {
+                    "new_open": f"{port.status_icon} Newly Opened",
+                    "new_closed": f"{port.status_icon} Newly Closed",
+                    "still_open": f"{port.status_icon} Still Open",
+                    "still_closed": f"{port.status_icon} Still Closed",
+                    "none": f"{port.status_icon} First Seen"
+                }
+                return labels.get(change, "")
         
-        # Background color role (color-code by state)
+        # Background color role (color-code by status change)
         elif role == Qt.ItemDataRole.BackgroundRole:
-            if port.state == "open":
-                return QColor(200, 255, 200)  # Light green
+            change = port.status_change
+            
+            # Priority: Status change colors override state colors
+            if change == "new_open":
+                return QColor(144, 238, 144)  # Light green - newly opened!
+            elif change == "new_closed":
+                return QColor(255, 160, 160)  # Light red - newly closed!
+            elif change == "still_open":
+                return QColor(230, 255, 230)  # Very light green - stable open
+            elif port.state == "open":
+                return QColor(200, 255, 200)  # Light green - open (no history)
             elif port.state == "closed":
                 return QColor(255, 200, 200)  # Light red
             elif port.state == "filtered":
@@ -283,6 +304,19 @@ class PortsTableModel(QAbstractTableModel):
         elif role == Qt.ItemDataRole.ToolTipRole:
             tooltip = f"Port: {port.number}/{port.protocol}\n"
             tooltip += f"State: {port.state}\n"
+            
+            # Status change info
+            if port.previous_state:
+                tooltip += f"Previous State: {port.previous_state}\n"
+                tooltip += f"Status: {port.status_change.replace('_', ' ').title()}\n"
+            
+            # Timestamps
+            if port.discovered_at:
+                tooltip += f"First Seen: {port.discovered_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            if port.last_seen:
+                tooltip += f"Last Seen: {port.last_seen.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            
+            # Service info
             if port.service_name:
                 tooltip += f"Service: {port.service_name}\n"
             if port.service_product:

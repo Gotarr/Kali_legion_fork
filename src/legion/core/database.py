@@ -128,6 +128,17 @@ class SimpleDatabase:
             host_ip: IP address of the host.
             port: Port object to save.
         """
+        # Check if port exists and track state changes
+        port_key = f"{port.number}/{port.protocol}"
+        if host_ip in self._ports:
+            for existing_port in self._ports[host_ip]:
+                if f"{existing_port['number']}/{existing_port['protocol']}" == port_key:
+                    # Port exists - track state change
+                    old_state = existing_port.get('state')
+                    if old_state and old_state != port.state:
+                        port.previous_state = old_state
+                    break
+        
         port_dict = {
             "number": port.number,
             "protocol": port.protocol,
@@ -143,6 +154,7 @@ class SimpleDatabase:
             "confidence": port.confidence,
             "discovered_at": port.discovered_at.isoformat() if port.discovered_at else None,
             "last_seen": port.last_seen.isoformat() if port.last_seen else None,
+            "previous_state": port.previous_state,
             "notes": port.notes,
         }
         
@@ -214,6 +226,39 @@ class SimpleDatabase:
         """
         return [self.get_host(ip) for ip in self._hosts.keys()]
     
+    def delete_host(self, ip: str) -> bool:
+        """
+        Delete a host and all associated ports/services.
+        
+        Args:
+            ip: IP address of the host to delete.
+        
+        Returns:
+            True if host was deleted, False if not found.
+        """
+        if ip not in self._hosts:
+            return False
+        
+        # Delete host
+        del self._hosts[ip]
+        
+        # Delete associated ports
+        if ip in self._ports:
+            del self._ports[ip]
+        
+        # Delete associated services
+        services_to_delete = [
+            svc_id for svc_id, svc in self._services.items()
+            if svc.get("host_ip") == ip
+        ]
+        for svc_id in services_to_delete:
+            del self._services[svc_id]
+        
+        # Save to disk
+        self._save()
+        
+        return True
+    
     def get_ports(self, host_ip: str) -> list[Port]:
         """
         Get all ports for a host.
@@ -242,6 +287,7 @@ class SimpleDatabase:
                 service_hostname=data.get("service_hostname"),
                 service_method=data.get("service_method", "table"),
                 confidence=data.get("confidence", 0),
+                previous_state=data.get("previous_state"),
                 notes=data.get("notes", ""),
             )
             
