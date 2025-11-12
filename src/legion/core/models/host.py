@@ -75,6 +75,12 @@ class Host:
     last_seen: datetime = field(default_factory=datetime.now)
     """Last seen timestamp."""
     
+    scanned_ports: Optional[str] = None
+    """Complete port list from last scan (e.g., '22,80,443,8080-8090')."""
+    
+    scan_status: str = "idle"
+    """Current scan status: idle, queued, running, completed, failed."""
+    
     notes: str = ""
     """Additional notes."""
     

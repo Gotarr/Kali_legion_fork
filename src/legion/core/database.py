@@ -114,6 +114,8 @@ class SimpleDatabase:
             "last_boot": host.last_boot.isoformat() if host.last_boot else None,
             "discovered_at": host.discovered_at.isoformat() if host.discovered_at else None,
             "last_seen": host.last_seen.isoformat() if host.last_seen else None,
+            "scanned_ports": host.scanned_ports,
+            "scan_status": host.scan_status,
             "notes": host.notes,
         }
         
@@ -204,6 +206,8 @@ class SimpleDatabase:
             reason=data.get("reason"),
             distance=data.get("distance", 0),
             uptime=data.get("uptime"),
+            scanned_ports=data.get("scanned_ports"),
+            scan_status=data.get("scan_status", "idle"),
             notes=data.get("notes", ""),
         )
         

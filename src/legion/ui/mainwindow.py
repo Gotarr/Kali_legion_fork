@@ -287,7 +287,7 @@ class MainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
-        # Keyboard Shortcuts
+        # Keyboard Shortcuts (opens About dialog on Shortcuts tab)
         shortcuts_action = QtGui.QAction("&Keyboard Shortcuts", self)
         shortcuts_action.setShortcut("F1")
         shortcuts_action.triggered.connect(lambda: self._on_about(tab=1))
@@ -636,9 +636,13 @@ class MainWindow(QMainWindow):
         
         logger.info("Settings reloaded and applied")
     
-    def _on_about(self) -> None:
-        """Show About dialog."""
-        dialog = AboutDialog(self)
+    def _on_about(self, tab: int | None = None) -> None:
+        """Show About dialog.
+        
+        Args:
+            tab: Optional tab index to select on open (e.g., 1 for Shortcuts).
+        """
+        dialog = AboutDialog(self, initial_tab=tab or 0)
         dialog.exec()
     
     def _show_host_context_menu(self, position: QtCore.QPoint) -> None:

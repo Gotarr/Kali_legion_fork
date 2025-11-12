@@ -229,6 +229,7 @@ class ScanManager:
                 
                 # Build nmap arguments based on scan type
                 args = self._build_scan_args(job.scan_type, job.target, job.options)
+                logger.debug(f"Starting nmap with args: {args}")
                 args.extend(["-oX", str(output_file)])
                 
                 # Execute scan (args as list, not *args)
@@ -286,6 +287,8 @@ class ScanManager:
         # Add custom options
         if "ports" in options:
             args.extend(["-p", options["ports"]])
+        if options.get("version_detection"):
+            args.append("-sV")
         if "timing" in options:
             args.append(f"-T{options['timing']}")
         if "scripts" in options:

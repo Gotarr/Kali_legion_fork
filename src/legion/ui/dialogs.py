@@ -319,13 +319,20 @@ class ScanProgressDialog(QDialog):
 
 
 class AboutDialog(QDialog):
-    """About Legion dialog with tabs for different information."""
+    """About Legion dialog with tabs for different information.
+
+    Parameters:
+        initial_tab: Optional index of the tab to select when the dialog opens.
+    """
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_tab: int = 0):
         super().__init__(parent)
         self.setWindowTitle("About Legion")
         self.setMinimumSize(500, 400)
         self._setup_ui()
+        # Safely select initial tab if in range
+        if 0 <= initial_tab < self.tabs.count():
+            self.tabs.setCurrentIndex(initial_tab)
     
     def _setup_ui(self):
         """Setup dialog UI."""
@@ -355,6 +362,8 @@ class AboutDialog(QDialog):
         
         # Tab widget
         tabs = QTabWidget()
+        # Store reference for external tab selection
+        self.tabs = tabs
         
         # About tab
         about_widget = QWidget()
