@@ -1,0 +1,11 @@
+# Custom scripts directory for user-specific tools
+# Add your custom v2.0-compatible scripts here
+
+# Example structure:
+# custom/
+# ├── my_script.py
+# ├── another_tool.py
+# └── README.md
+
+# Note: Custom scripts should use the new Legion v2.0 API
+# See scripts/README.md for migration guide

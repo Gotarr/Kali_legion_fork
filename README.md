@@ -335,14 +335,35 @@ sudoedit /root/.local/share/legion/legion.conf
 Legion is licensed under the GNU General Public License v3.0. Take a look at the
 [LICENSE](https://github.com/GoVanguard/legion/blob/master/LICENSE) for more information.
 
+**This fork (v2.0) is provided "AS IS" without warranty of any kind.**  
+Contributors to this fork disclaim any liability for damages resulting from the use of this software.
+
 ## ⭐️ Attribution
 
-* Refactored Python 3.6+ codebase, added feature set and ongoing development of Legion is credited
-  to [GoVanguard](https://govanguard.com)
-* The initial Sparta Python 2.7 codebase and application design is credited SECFORCE.
-* Several additional PortActions, PortTerminalActions and SchedulerSettings are credited to batmancrew.
+### Original Authors
+* **GoVanguard** (https://govanguard.com) - Refactored Python 3.6+ codebase, Legion v1.x development
+* **SECFORCE** - Initial Sparta Python 2.7 codebase and application design
+* **batmancrew** - Additional PortActions, PortTerminalActions and SchedulerSettings
+
+### v2.0 Cross-Platform Migration Contributors
+* **Gotarr** (https://github.com/Gotarr) - Phase 1-6 Migration:
+  - Phase 1: Platform abstraction (Windows/Linux/WSL detection)
+  - Phase 2: Tool discovery system
+  - Phase 3: Core logic (Database, Scanner, Models)
+  - Phase 4: Configuration system (TOML-based)
+  - Phase 5: UI Migration (PyQt6, Modern architecture)
+  - Phase 6: Additional tools integration, JSON Import, Legacy settings
+
+### Additional Credits
 * The nmap XML output parsing engine was largely based on code by yunshu, modified by ketchup and modified SECFORCE.
 * ms08-067_check script used by `smbenum.sh` is credited to Bernardo Damele A.G.
 * Legion relies heavily on nmap, hydra, python, PyQt, SQLAlchemy and many other tools and technologies, so we would like
   to thank all of the people involved in the creation of those.
 * Special thanks to Dmitriy Dubson for his continued contributions to the project!
+
+### Disclaimer
+Contributors to this fork provide modifications "AS IS" without warranty of any kind, express or implied,
+including but not limited to the warranties of merchantability, fitness for a particular purpose and
+noninfringement. In no event shall the contributors be liable for any claim, damages or other liability,
+whether in an action of contract, tort or otherwise, arising from, out of or in connection with the
+software or the use or other dealings in the software.

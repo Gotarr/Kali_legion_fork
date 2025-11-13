@@ -247,5 +247,21 @@ Siehe **[docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md)** für Code-Stand
 
 ---
 
+## 📜 Copyright & Contributors
+
+**Original Authors**:
+- GoVanguard (https://govanguard.com) - Legion v1.x
+- SECFORCE - Sparta (original codebase)
+
+**v2.0 Migration**:
+- Gotarr (https://github.com/Gotarr) - Cross-Platform Rewrite (Phase 1-6)
+
+**Disclaimer**:
+This fork is provided "AS IS" without warranty of any kind. Contributors disclaim any liability
+for damages resulting from the use of this software. See LICENSE for full terms.
+
+---
+
 **Maintainer**: Gotarr  
-**Letzte Aktualisierung**: 12. November 2025
+**Version**: 2.0.0-alpha6  
+**Letzte Aktualisierung**: 13. November 2025

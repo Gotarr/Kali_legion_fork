@@ -2,6 +2,36 @@
                        Version 3, 29 June 2007
 
  Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
+
+=============================================================================
+ADDITIONAL TERMS FOR THIS FORK (Legion v2.0)
+=============================================================================
+
+Original Copyright:
+  Copyright (c) 2023 Gotham Security
+  Copyright (c) GoVanguard (https://govanguard.com) - Legion v1.x
+  Copyright (c) SECFORCE - Sparta (original codebase)
+
+Fork Contributors (v2.0 Cross-Platform Migration):
+  Gotarr (https://github.com/Gotarr) - 2025
+
+DISCLAIMER OF LIABILITY:
+Contributors to this fork provide their modifications "AS IS" and disclaim
+all warranties, express or implied, including but not limited to implied
+warranties of merchantability and fitness for a particular purpose.
+
+IN NO EVENT SHALL ANY CONTRIBUTOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The above disclaimer supplements but does not replace the GPL v3 license terms.
+=============================================================================
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 
