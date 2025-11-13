@@ -20,9 +20,13 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTableView
 from legion.config import get_config, ConfigManager
 from legion.core.database import SimpleDatabase
 from legion.core.scanner import ScanManager, ScanJob
+from legion.core.models import Credential
 from legion.ui.models import HostsTableModel, PortsTableModel
 from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog, AddHostDialog
 from legion.ui.settings import SettingsDialog
+from legion.tools.hydra import HydraTool
+from legion.utils.wordlists import get_service_wordlists, export_credentials_to_wordlist
+from legion.utils.wordlist_processor import WordlistProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -879,6 +883,14 @@ class MainWindow(QMainWindow):
             lambda: self._export_host(host_ip)
         )
         
+        # Export credentials (if any)
+        host_creds = self.database.get_credentials(host_ip)
+        if host_creds:
+            export_creds_action = menu.addAction(f"🔑 Export Credentials ({len(host_creds)})...")
+            export_creds_action.triggered.connect(
+                lambda: self._export_host_credentials(host_ip)
+            )
+        
         menu.addSeparator()
         
         # Remove host
@@ -941,6 +953,46 @@ class MainWindow(QMainWindow):
             copy_service_action.triggered.connect(
                 lambda: QtWidgets.QApplication.clipboard().setText(service)
             )
+        
+        menu.addSeparator()
+        
+        # Brute Force submenu
+        bruteforce_menu = menu.addMenu("🔑 Brute Force")
+        
+        # Add Hydra attack for common services
+        service_lower = service.lower() if service and service != "-" else ""
+        
+        # Map service names to Hydra service types
+        hydra_services = {
+            'ssh': 'ssh',
+            'ftp': 'ftp',
+            'telnet': 'telnet',
+            'mysql': 'mysql',
+            'postgres': 'postgres',
+            'postgresql': 'postgres',
+            'mssql': 'mssql',
+            'vnc': 'vnc',
+            'http': 'http-get',
+            'https': 'https-get',
+            'smb': 'smb',
+            'rdp': 'rdp'
+        }
+        
+        # Check if service is attackable
+        hydra_service = None
+        for svc_name, hydra_svc in hydra_services.items():
+            if svc_name in service_lower:
+                hydra_service = hydra_svc
+                break
+        
+        if hydra_service:
+            hydra_action = bruteforce_menu.addAction(f"Hydra - {service}")
+            hydra_action.triggered.connect(
+                lambda: self._launch_hydra_attack(host_ip, port_number, hydra_service)
+            )
+        else:
+            no_support = bruteforce_menu.addAction("No supported service detected")
+            no_support.setEnabled(False)
         
         # Show menu at cursor position
         menu.exec(self.ports_table.viewport().mapToGlobal(position))
@@ -1557,6 +1609,936 @@ class MainWindow(QMainWindow):
         
         logger.info("MainWindow closed")
         event.accept()
+    
+    def _launch_hydra_attack(self, host_ip: str, port: int, service: str) -> None:
+        """
+        Launch Hydra brute force attack against a service.
+        
+        Args:
+            host_ip: Target host IP
+            port: Target port number
+            service: Service type (ssh, ftp, etc.)
+        """
+        # Create dialog to configure attack
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(f"Hydra Brute Force - {service}://{host_ip}:{port}")
+        dialog.setMinimumWidth(500)
+        
+        layout = QtWidgets.QVBoxLayout(dialog)
+        
+        # Info label
+        info_label = QtWidgets.QLabel(
+            f"Configure brute force attack against:\n"
+            f"🎯 Target: {host_ip}:{port}\n"
+            f"🔧 Service: {service}"
+        )
+        info_label.setStyleSheet("padding: 10px; background-color: #2b2b2b; border-radius: 5px;")
+        layout.addWidget(info_label)
+        
+        # Wordlists group - SIMPLIFIED: Only one directory path
+        wordlist_group = QtWidgets.QGroupBox("Wordlists")
+        wordlist_layout = QtWidgets.QVBoxLayout()
+        
+        # Info label
+        info_text = QtWidgets.QLabel(
+            "📂 Select a directory containing wordlist files.\n"
+            "All .txt files will be automatically processed:\n"
+            "  • Single format (usernames or passwords)\n"
+            "  • Combo format (username:password) - auto-detected\n"
+            "  • Mixed formats - all combined"
+        )
+        info_text.setStyleSheet("color: #888; font-size: 10px; padding: 5px;")
+        wordlist_layout.addWidget(info_text)
+        
+        # Single wordlist directory selector
+        dir_layout = QtWidgets.QHBoxLayout()
+        wordlist_edit = QtWidgets.QLineEdit()
+        wordlist_edit.setPlaceholderText("Path to wordlist directory (e.g., scripts/wordlists/)...")
+        
+        wordlist_browse = QtWidgets.QPushButton("📁 Browse Directory...")
+        wordlist_browse.clicked.connect(
+            lambda: self._browse_wordlist_directory(wordlist_edit)
+        )
+        
+        dir_layout.addWidget(wordlist_edit)
+        dir_layout.addWidget(wordlist_browse)
+        wordlist_layout.addLayout(dir_layout)
+        
+        # Set default to wordlists directory
+        default_dir = Path("scripts/wordlists")
+        if default_dir.exists():
+            wordlist_edit.setText(str(default_dir))
+        
+        wordlist_group.setLayout(wordlist_layout)
+        layout.addWidget(wordlist_group)
+        
+        # Options group
+        options_group = QtWidgets.QGroupBox("Attack Options")
+        options_layout = QtWidgets.QFormLayout()
+        
+        # Tasks (threads)
+        tasks_spin = QtWidgets.QSpinBox()
+        tasks_spin.setRange(1, 64)
+        tasks_spin.setValue(self.config.tools.hydra_default_tasks)
+        tasks_spin.setSuffix(" threads")
+        options_layout.addRow("Parallel Tasks:", tasks_spin)
+        
+        # Timeout
+        timeout_spin = QtWidgets.QSpinBox()
+        timeout_spin.setRange(10, 3600)
+        timeout_spin.setValue(self.config.tools.hydra_default_timeout)
+        timeout_spin.setSuffix(" seconds")
+        options_layout.addRow("Timeout:", timeout_spin)
+        
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
+        
+        # Buttons
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        # Show dialog and launch attack if accepted
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            wordlist_path = wordlist_edit.text().strip()
+            
+            if not wordlist_path:
+                QMessageBox.warning(
+                    self,
+                    "Missing Wordlists",
+                    "Please select a wordlist directory."
+                )
+                return
+            
+            wordlist_dir = Path(wordlist_path)
+            if not wordlist_dir.exists():
+                QMessageBox.warning(
+                    self,
+                    "Invalid Path",
+                    f"Path does not exist:\n{wordlist_path}"
+                )
+                return
+            
+            # Analyze and prepare wordlists using smart strategy
+            try:
+                # Import strategy module
+                from legion.utils.wordlist_strategy import WordlistStrategy, AttackMode
+                import tempfile
+                
+                # Step 1: Analyze directory
+                self.status_label.setText("🔍 Analyzing wordlists...")
+                QtWidgets.QApplication.processEvents()  # Update UI
+                
+                analysis = WordlistStrategy.analyze_directory(wordlist_dir)
+                
+                # Step 2: Show analysis to user
+                analysis_msg = (
+                    f"📊 Wordlist Analysis:\n\n"
+                    f"Mode: {analysis.mode.value.upper()}\n"
+                    f"Combo files: {len(analysis.combo_files)} ({analysis.total_combo_entries} entries)\n"
+                    f"Username files: {len(analysis.username_files)} ({analysis.total_username_entries} entries)\n"
+                    f"Password files: {len(analysis.password_files)} ({analysis.total_password_entries} entries)\n"
+                    f"Estimated combinations: {analysis.estimated_combinations:,}\n\n"
+                    f"Recommendation:\n{analysis.recommendation}\n\n"
+                    f"Proceed with attack?"
+                )
+                
+                reply = QMessageBox.question(
+                    self,
+                    "Wordlist Strategy",
+                    analysis_msg,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                
+                if reply == QMessageBox.StandardButton.No:
+                    self.status_label.setText("Attack cancelled")
+                    return
+                
+                # Step 3: Prepare files based on mode
+                temp_dir = Path(tempfile.gettempdir()) / "legion_wordlists"
+                
+                if analysis.mode == AttackMode.COMBO:
+                    # Use combo mode (-C)
+                    combo_file = WordlistStrategy.prepare_combo_file(
+                        analysis.combo_files,
+                        temp_dir,
+                        max_entries=10000
+                    )
+                    
+                    # Launch attack with combo file
+                    self._run_hydra_attack_async(
+                        host_ip,
+                        port,
+                        service,
+                        None,  # No username file
+                        None,  # No password file
+                        tasks_spin.value(),
+                        timeout_spin.value(),
+                        original_wordlist_path=str(wordlist_dir),
+                        combo_file=str(combo_file)
+                    )
+                
+                else:  # SEPARATE mode
+                    # Merge username/password files
+                    merged_user_file, merged_pass_file = WordlistStrategy.prepare_separate_files(
+                        analysis.username_files,
+                        analysis.password_files,
+                        temp_dir,
+                        max_entries=1000
+                    )
+                    
+                    # Launch attack with separate files
+                    self._run_hydra_attack_async(
+                        host_ip,
+                        port,
+                        service,
+                        str(merged_user_file),
+                        str(merged_pass_file),
+                        tasks_spin.value(),
+                        timeout_spin.value(),
+                        original_wordlist_path=str(wordlist_dir)
+                    )
+                
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Wordlist Processing Failed",
+                    f"Failed to process wordlists:\n{str(e)}"
+                )
+                logger.error(f"Wordlist processing error: {e}", exc_info=True)
+                return
+    
+    def _browse_wordlist_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
+        """
+        Browse for wordlist directory (simplified version).
+        
+        Args:
+            line_edit: Line edit to update with selected directory
+        """
+        # Directory selection dialog
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self,
+            "Select Wordlist Directory",
+            str(Path("scripts/wordlists")),
+            QtWidgets.QFileDialog.Option.ShowDirsOnly
+        )
+        
+        if directory:
+            line_edit.setText(directory)
+            
+            # Show statistics about selected directory
+            try:
+                from legion.utils.wordlist_processor import WordlistProcessor
+                stats = WordlistProcessor.get_wordlist_stats(Path(directory))
+                
+                info_parts = []
+                info_parts.append(f"📁 {Path(directory).name}")
+                
+                if stats['files'] > 0:
+                    info_parts.append(f"Files: {stats['files']}")
+                    info_parts.append(f"Entries: {stats['unique_entries']:,}")
+                    
+                    if stats['is_combo']:
+                        info_parts.append("(combo format detected)")
+                else:
+                    info_parts.append("(no .txt files found)")
+                
+                self.status_label.setText(" | ".join(info_parts))
+                
+            except Exception as e:
+                logger.warning(f"Could not get wordlist stats: {e}")
+    
+    def _browse_wordlist(self, line_edit: QtWidgets.QLineEdit, title: str) -> None:
+        """
+        Browse for wordlist file or directory.
+        
+        Args:
+            line_edit: Line edit to update with selected path
+            title: Dialog title
+        """
+        # Create custom dialog with file AND folder selection
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.AnyFile)
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
+        
+        # Enable both file and directory selection
+        file_view = dialog.findChild(QtWidgets.QListView, "listView")
+        if file_view:
+            file_view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        
+        tree_view = dialog.findChild(QtWidgets.QTreeView)
+        if tree_view:
+            tree_view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        
+        # Add "Select Folder" button
+        dialog.setOption(QtWidgets.QFileDialog.Option.ShowDirsOnly, False)
+        dialog.setNameFilter("Wordlists (*.txt);;All Files (*.*)")
+        
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            selected = dialog.selectedFiles()
+            if selected:
+                path = selected[0]
+                line_edit.setText(path)
+                
+                # Show info about selected path
+                from legion.utils.wordlist_processor import WordlistProcessor
+                stats = WordlistProcessor.get_wordlist_stats(Path(path))
+                
+                info_text = f"Selected: {Path(path).name}\n"
+                if stats['files'] > 1:
+                    info_text += f"Files: {stats['files']}\n"
+                info_text += f"Entries: {stats['unique_entries']}"
+                if stats['is_combo']:
+                    info_text += " (combo format detected)"
+                
+                self.status_label.setText(info_text)
+    
+    def _run_hydra_attack_async(
+        self,
+        host_ip: str,
+        port: int,
+        service: str,
+        username_file: Optional[str],
+        password_file: Optional[str],
+        tasks: int,
+        timeout: int,
+        original_wordlist_path: Optional[str] = None,
+        combo_file: Optional[str] = None
+    ) -> None:
+        """
+        Run Hydra attack asynchronously.
+        
+        Args:
+            host_ip: Target host
+            port: Target port
+            service: Service type
+            username_file: Path to (merged) username wordlist (None if combo mode)
+            password_file: Path to (merged) password wordlist (None if combo mode)
+            tasks: Number of parallel tasks
+            timeout: Attack timeout in seconds
+            original_wordlist_path: Original directory path (for auto-export)
+            combo_file: Path to combo file (user:pass format) - if provided, uses -C mode
+        """
+        async def run_attack():
+            # Create and show progress dialog
+            progress_dialog = QtWidgets.QProgressDialog(
+                f"Running Hydra attack on {service}://{host_ip}:{port}...",
+                "Cancel",
+                0,
+                0,  # Indeterminate progress (no max value)
+                self
+            )
+            progress_dialog.setWindowTitle("Hydra Attack in Progress")
+            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            progress_dialog.setMinimumDuration(0)  # Show immediately
+            progress_dialog.setAutoClose(False)
+            progress_dialog.setAutoReset(False)
+            
+            # Track if user cancelled
+            cancelled = False
+            
+            def on_cancel():
+                nonlocal cancelled
+                cancelled = True
+                progress_dialog.setLabelText("⚠️ Cancelling attack...")
+            
+            progress_dialog.canceled.connect(on_cancel)
+            progress_dialog.show()
+            QtWidgets.QApplication.processEvents()
+            
+            # Use QTimer for progress updates (avoids asyncio task conflicts)
+            import time
+            start_time = time.time()
+            
+            def update_progress_timer():
+                """Update progress dialog text (called by QTimer)."""
+                if not cancelled and progress_dialog.isVisible():
+                    elapsed = int(time.time() - start_time)
+                    progress_dialog.setLabelText(
+                        f"Running Hydra attack on {service}://{host_ip}:{port}...\n"
+                        f"⏱️ Elapsed time: {elapsed}s\n"
+                        f"🔍 Testing credentials..."
+                    )
+            
+            # Create timer for progress updates
+            progress_timer = QtCore.QTimer()
+            progress_timer.timeout.connect(update_progress_timer)
+            progress_timer.start(500)  # Update every 500ms
+            
+            try:
+                # Update status
+                if combo_file:
+                    self.status_label.setText(
+                        f"🔑 Hydra attacking {service}://{host_ip}:{port} (COMBO mode)..."
+                    )
+                else:
+                    self.status_label.setText(
+                        f"🔑 Hydra attacking {service}://{host_ip}:{port} (SEPARATE mode)..."
+                    )
+                
+                # Initialize Hydra tool
+                hydra = HydraTool()
+                
+                if not await hydra.validate():
+                    QMessageBox.critical(
+                        self,
+                        "Hydra Not Found",
+                        "Hydra is not installed or not found in PATH.\n"
+                        "Please install Hydra and configure the path in Settings."
+                    )
+                    return
+                
+                # Run attack (combo mode or separate mode)
+                # For HTTP services, pass path as module option (-m)
+                additional_args = []
+                if service in ['http-get', 'http-post', 'https-get', 'https-post']:
+                    # Use -m option for HTTP path
+                    additional_args = ["-m", "/"]
+                
+                if combo_file:
+                    # Combo mode: -C file
+                    result = await hydra.attack(
+                        target=host_ip,
+                        service=service,
+                        combo_file=Path(combo_file),
+                        port=port,
+                        tasks=tasks,
+                        timeout=float(timeout),
+                        additional_args=additional_args if additional_args else None
+                    )
+                else:
+                    # Separate mode: -L users -P passwords
+                    result = await hydra.attack(
+                        target=host_ip,
+                        service=service,
+                        login_file=Path(username_file),
+                        password_file=Path(password_file),
+                        port=port,
+                        tasks=tasks,
+                        timeout=float(timeout),
+                        additional_args=additional_args if additional_args else None
+                    )
+                
+                # Stop progress timer and close dialog
+                progress_timer.stop()
+                progress_dialog.close()
+                
+                # Check if user cancelled
+                if cancelled:
+                    self.status_label.setText("⚠️ Hydra attack cancelled by user")
+                    QMessageBox.information(
+                        self,
+                        "Attack Cancelled",
+                        "Hydra attack was cancelled by user."
+                    )
+                    return
+                
+                # Parse results
+                hydra_result = await hydra.parse_output(result)
+                
+                # Auto-export successful credentials to used wordlists
+                if hydra_result.credentials:
+                    await self._auto_export_to_wordlists(
+                        hydra_result.credentials,
+                        username_file,
+                        password_file,
+                        combo_file
+                    )
+                
+                # Show results dialog
+                self._show_hydra_results(
+                    host_ip,
+                    port,
+                    service,
+                    hydra_result,
+                    result.success
+                )
+                
+                # Save credentials to database if found
+                if hydra_result.credentials:
+                    for cred in hydra_result.credentials:
+                        # Create Credential object
+                        credential = Credential(
+                            host=cred.host,
+                            port=cred.port,
+                            service=cred.service,
+                            username=cred.login,
+                            password=cred.password,
+                            source="hydra",
+                            verified=True
+                        )
+                        
+                        # Save to database
+                        self.database.save_credential(credential)
+                        
+                        logger.info(
+                            f"Saved credential: {cred.login}:{cred.password} "
+                            f"for {cred.service}://{cred.host}:{cred.port}"
+                        )
+                
+                self.status_label.setText("✅ Hydra attack completed")
+                
+            except Exception as e:
+                # Stop timer and close progress dialog on error
+                if 'progress_timer' in locals():
+                    progress_timer.stop()
+                if 'progress_dialog' in locals():
+                    progress_dialog.close()
+                
+                logger.error(f"Hydra attack failed: {e}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Attack Failed",
+                    f"Hydra attack failed:\n{str(e)}"
+                )
+                self.status_label.setText("❌ Hydra attack failed")
+        
+        # Run in event loop
+        asyncio.create_task(run_attack())
+    
+    def _show_hydra_results(
+        self,
+        host_ip: str,
+        port: int,
+        service: str,
+        hydra_result,
+        success: bool
+    ) -> None:
+        """
+        Show Hydra attack results in dialog.
+        
+        Args:
+            host_ip: Target host
+            port: Target port
+            service: Service type
+            hydra_result: HydraResult object
+            success: Whether attack completed successfully
+        """
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(f"Hydra Results - {service}://{host_ip}:{port}")
+        dialog.setMinimumSize(600, 400)
+        
+        layout = QtWidgets.QVBoxLayout(dialog)
+        
+        # Status label
+        if hydra_result.credentials:
+            status_text = f"✅ Found {len(hydra_result.credentials)} credential(s)!"
+            status_color = "#00ff00"
+        elif success:
+            status_text = "⚠️ Attack completed, but no credentials found"
+            status_color = "#ffaa00"
+        else:
+            status_text = "❌ Attack failed or was stopped"
+            status_color = "#ff0000"
+        
+        status_label = QtWidgets.QLabel(status_text)
+        status_label.setStyleSheet(
+            f"font-weight: bold; font-size: 14px; color: {status_color}; "
+            f"padding: 10px; background-color: #2b2b2b; border-radius: 5px;"
+        )
+        layout.addWidget(status_label)
+        
+        # Credentials table
+        if hydra_result.credentials:
+            cred_group = QtWidgets.QGroupBox("Found Credentials")
+            cred_layout = QtWidgets.QVBoxLayout()
+            
+            table = QtWidgets.QTableWidget()
+            table.setColumnCount(5)
+            table.setHorizontalHeaderLabels(["✓", "Host", "Port", "Username", "Password"])
+            table.setRowCount(len(hydra_result.credentials))
+            
+            for i, cred in enumerate(hydra_result.credentials):
+                # Status icon (all found credentials are successful)
+                status_item = QtWidgets.QTableWidgetItem("✓")
+                status_item.setForeground(QtGui.QColor("#00ff00"))  # Green
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(i, 0, status_item)
+                
+                table.setItem(i, 1, QtWidgets.QTableWidgetItem(cred.host))
+                table.setItem(i, 2, QtWidgets.QTableWidgetItem(str(cred.port)))
+                
+                # Username (bold)
+                user_item = QtWidgets.QTableWidgetItem(cred.login)
+                user_item.setFont(QtGui.QFont("Courier", weight=QtGui.QFont.Weight.Bold))
+                table.setItem(i, 3, user_item)
+                
+                # Password (bold)
+                pass_item = QtWidgets.QTableWidgetItem(cred.password)
+                pass_item.setFont(QtGui.QFont("Courier", weight=QtGui.QFont.Weight.Bold))
+                table.setItem(i, 4, pass_item)
+            
+            table.resizeColumnsToContents()
+            cred_layout.addWidget(table)
+            cred_group.setLayout(cred_layout)
+            layout.addWidget(cred_group)
+        
+        # Statistics
+        if hydra_result.statistics:
+            stats = hydra_result.statistics
+            stats_group = QtWidgets.QGroupBox("Attack Statistics")
+            stats_layout = QtWidgets.QFormLayout()
+            
+            stats_layout.addRow("Total Attempts:", QtWidgets.QLabel(str(stats.total_attempts)))
+            stats_layout.addRow("Successful:", QtWidgets.QLabel(str(stats.successful_attempts)))
+            
+            if stats.total_attempts > 0:
+                success_rate = (stats.successful_attempts / stats.total_attempts) * 100
+                stats_layout.addRow("Success Rate:", QtWidgets.QLabel(f"{success_rate:.2f}%"))
+            
+            stats_group.setLayout(stats_layout)
+            layout.addWidget(stats_group)
+        
+        # Action buttons
+        button_layout = QtWidgets.QHBoxLayout()
+        
+        # Export credentials button (only if credentials found)
+        if hydra_result.credentials:
+            export_btn = QtWidgets.QPushButton("💾 Export to Wordlist...")
+            export_btn.clicked.connect(
+                lambda: self._export_hydra_credentials(hydra_result.credentials, dialog)
+            )
+            button_layout.addWidget(export_btn)
+        
+        button_layout.addStretch()
+        
+        # Close button
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
+    
+    def _export_hydra_credentials(self, credentials, parent_dialog) -> None:
+        """
+        Export Hydra credentials to wordlist file.
+        
+        Args:
+            credentials: List of HydraCredential objects
+            parent_dialog: Parent dialog (to close after export)
+        """
+        # Ask user for export format
+        format_dialog = QtWidgets.QDialog(parent_dialog)
+        format_dialog.setWindowTitle("Export Credentials")
+        format_dialog.setMinimumWidth(400)
+        
+        layout = QtWidgets.QVBoxLayout(format_dialog)
+        
+        layout.addWidget(QtWidgets.QLabel("Select export format:"))
+        
+        # Format options
+        format_combo = QtWidgets.QComboBox()
+        format_combo.addItems([
+            "Passwords only",
+            "Usernames only",
+            "Username:Password (combo)",
+        ])
+        layout.addWidget(format_combo)
+        
+        # Buttons
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(format_dialog.accept)
+        button_box.rejected.connect(format_dialog.reject)
+        layout.addWidget(button_box)
+        
+        if format_dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+        
+        # Map format to mode
+        format_modes = {
+            0: "passwords",
+            1: "usernames",
+            2: "combo"
+        }
+        mode = format_modes[format_combo.currentIndex()]
+        
+        # Ask for output file
+        from legion.utils.wordlists import get_wordlists_dir
+        
+        default_dir = get_wordlists_dir()
+        default_name = f"hydra_export_{mode}.txt"
+        
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            parent_dialog,
+            "Export Credentials",
+            str(default_dir / default_name),
+            "Text Files (*.txt);;All Files (*.*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Convert HydraCredentials to Credential objects for export
+        from legion.core.models import Credential
+        creds_to_export = []
+        
+        for hcred in credentials:
+            creds_to_export.append(
+                Credential(
+                    host=hcred.host,
+                    port=hcred.port,
+                    service=hcred.service,
+                    username=hcred.login,
+                    password=hcred.password,
+                    source="hydra"
+                )
+            )
+        
+        # Export
+        try:
+            count = export_credentials_to_wordlist(
+                creds_to_export,
+                Path(file_path),
+                mode=mode
+            )
+            
+            QMessageBox.information(
+                parent_dialog,
+                "Export Successful",
+                f"Exported {count} entries to:\n{file_path}"
+            )
+            
+            logger.info(f"Exported {count} credentials to {file_path}")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                parent_dialog,
+                "Export Failed",
+                f"Failed to export credentials:\n{str(e)}"
+            )
+            logger.error(f"Credential export failed: {e}", exc_info=True)
+    
+    async def _auto_export_to_wordlists(
+        self,
+        credentials,
+        username_file: Optional[str],
+        password_file: Optional[str],
+        combo_file: Optional[str] = None
+    ) -> None:
+        """
+        Automatically export successful credentials back to used wordlists.
+        Avoids duplicates by checking existing entries.
+        
+        Args:
+            credentials: List of HydraCredential objects
+            username_file: Original username wordlist path (None if combo mode)
+            password_file: Original password wordlist path (None if combo mode)
+            combo_file: Original combo wordlist path (for combo mode)
+        """
+        try:
+            from legion.core.models import Credential
+            
+            # Convert to Credential objects
+            creds_to_export = []
+            for hcred in credentials:
+                creds_to_export.append(
+                    Credential(
+                        host=hcred.host,
+                        port=hcred.port,
+                        service=hcred.service,
+                        username=hcred.login,
+                        password=hcred.password,
+                        source="hydra",
+                        verified=True
+                    )
+                )
+            
+            # If combo mode, export to combo file
+            if combo_file and Path(combo_file).exists():
+                combo_path = Path(combo_file)
+                existing_combos = set()
+                
+                # Read existing entries
+                try:
+                    with open(combo_path, 'r', encoding='utf-8') as f:
+                        existing_combos = {line.strip() for line in f if line.strip() and ':' in line}
+                except Exception as e:
+                    logger.warning(f"Could not read existing combos: {e}")
+                
+                # Add new unique combos
+                new_combos = {
+                    f"{cred.username}:{cred.password}"
+                    for cred in creds_to_export
+                    if cred.username and cred.password
+                }
+                combos_to_add = new_combos - existing_combos
+                
+                if combos_to_add:
+                    with open(combo_path, 'a', encoding='utf-8') as f:
+                        for combo in sorted(combos_to_add):
+                            f.write(f"{combo}\n")
+                    
+                    logger.info(
+                        f"Auto-exported {len(combos_to_add)} new combos to {combo_path.name}"
+                    )
+                
+                return  # Done with combo mode
+            
+            # Separate mode: Auto-export usernames to username wordlist (avoid duplicates)
+            if username_file and Path(username_file).exists():
+                username_path = Path(username_file)
+                existing_users = set()
+                
+                # Read existing entries
+                try:
+                    with open(username_path, 'r', encoding='utf-8') as f:
+                        existing_users = {line.strip() for line in f if line.strip()}
+                except Exception as e:
+                    logger.warning(f"Could not read existing usernames: {e}")
+                
+                # Add new unique usernames
+                new_users = {cred.username for cred in creds_to_export if cred.username}
+                users_to_add = new_users - existing_users
+                
+                if users_to_add:
+                    with open(username_path, 'a', encoding='utf-8') as f:
+                        for user in sorted(users_to_add):
+                            f.write(f"{user}\n")
+                    
+                    logger.info(
+                        f"Auto-exported {len(users_to_add)} new usernames to {username_path.name}"
+                    )
+            
+            # Auto-export passwords to password wordlist (avoid duplicates)
+            if password_file and Path(password_file).exists():
+                password_path = Path(password_file)
+                existing_passwords = set()
+                
+                # Read existing entries
+                try:
+                    with open(password_path, 'r', encoding='utf-8') as f:
+                        existing_passwords = {line.strip() for line in f if line.strip()}
+                except Exception as e:
+                    logger.warning(f"Could not read existing passwords: {e}")
+                
+                # Add new unique passwords
+                new_passwords = {cred.password for cred in creds_to_export if cred.password}
+                passwords_to_add = new_passwords - existing_passwords
+                
+                if passwords_to_add:
+                    with open(password_path, 'a', encoding='utf-8') as f:
+                        for pwd in sorted(passwords_to_add):
+                            f.write(f"{pwd}\n")
+                    
+                    logger.info(
+                        f"Auto-exported {len(passwords_to_add)} new passwords to {password_path.name}"
+                    )
+            
+            logger.info(
+                f"✅ Auto-export completed: {len(creds_to_export)} credentials processed"
+            )
+            
+        except Exception as e:
+            logger.warning(f"Auto-export to wordlists failed: {e}", exc_info=True)
+    
+    def _export_host_credentials(self, host_ip: str) -> None:
+        """
+        Export all credentials for a specific host.
+        
+        Args:
+            host_ip: Host IP address
+        """
+        credentials = self.database.get_credentials(host_ip)
+        
+        if not credentials:
+            QMessageBox.information(
+                self,
+                "No Credentials",
+                f"No credentials found for {host_ip}"
+            )
+            return
+        
+        # Ask user for export format
+        format_dialog = QtWidgets.QDialog(self)
+        format_dialog.setWindowTitle(f"Export Credentials - {host_ip}")
+        format_dialog.setMinimumWidth(400)
+        
+        layout = QtWidgets.QVBoxLayout(format_dialog)
+        
+        layout.addWidget(QtWidgets.QLabel(
+            f"Found {len(credentials)} credential(s) for {host_ip}\n"
+            f"Select export format:"
+        ))
+        
+        # Format options
+        format_combo = QtWidgets.QComboBox()
+        format_combo.addItems([
+            "Passwords only",
+            "Usernames only",
+            "Username:Password (combo)",
+        ])
+        layout.addWidget(format_combo)
+        
+        # Buttons
+        button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok |
+            QtWidgets.QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(format_dialog.accept)
+        button_box.rejected.connect(format_dialog.reject)
+        layout.addWidget(button_box)
+        
+        if format_dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+        
+        # Map format to mode
+        format_modes = {
+            0: "passwords",
+            1: "usernames",
+            2: "combo"
+        }
+        mode = format_modes[format_combo.currentIndex()]
+        
+        # Ask for output file
+        from legion.utils.wordlists import get_wordlists_dir
+        
+        default_dir = get_wordlists_dir()
+        default_name = f"{host_ip}_{mode}.txt"
+        
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export Credentials",
+            str(default_dir / default_name),
+            "Text Files (*.txt);;All Files (*.*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Export
+        try:
+            count = export_credentials_to_wordlist(
+                credentials,
+                Path(file_path),
+                mode=mode
+            )
+            
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Exported {count} entries to:\n{file_path}"
+            )
+            
+            logger.info(f"Exported {count} credentials from {host_ip} to {file_path}")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                f"Failed to export credentials:\n{str(e)}"
+            )
+            logger.error(f"Credential export failed: {e}", exc_info=True)
 
 
 # Demo/Test

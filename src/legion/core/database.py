@@ -11,12 +11,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
-    from legion.core.models import Host, Port, Service
+    from legion.core.models import Host, Port, Service, Credential
     from legion.platform.paths import get_data_dir
 except ImportError:
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from legion.core.models import Host, Port, Service
+    from legion.core.models import Host, Port, Service, Credential
     from legion.platform.paths import get_data_dir
 
 
@@ -58,11 +58,13 @@ class SimpleDatabase:
         self.hosts_file = self.base_dir / "hosts.json"
         self.ports_file = self.base_dir / "ports.json"
         self.services_file = self.base_dir / "services.json"
+        self.credentials_file = self.base_dir / "credentials.json"
         
         # In-memory cache
         self._hosts: dict[str, dict] = {}
         self._ports: dict[str, list[dict]] = {}  # Key: host_ip
         self._services: dict[str, dict] = {}
+        self._credentials: list[dict] = []
         
         # Load existing data
         self._load()
@@ -80,6 +82,10 @@ class SimpleDatabase:
         if self.services_file.exists():
             with open(self.services_file, 'r') as f:
                 self._services = json.load(f)
+        
+        if self.credentials_file.exists():
+            with open(self.credentials_file, 'r') as f:
+                self._credentials = json.load(f)
     
     def _save(self) -> None:
         """Save data to JSON files."""
@@ -91,6 +97,9 @@ class SimpleDatabase:
         
         with open(self.services_file, 'w') as f:
             json.dump(self._services, f, indent=2, default=_datetime_serializer)
+        
+        with open(self.credentials_file, 'w') as f:
+            json.dump(self._credentials, f, indent=2, default=_datetime_serializer)
     
     def save_host(self, host: Host) -> None:
         """
@@ -383,6 +392,77 @@ class SimpleDatabase:
     def __repr__(self) -> str:
         """Developer-friendly representation."""
         return f"<SimpleDatabase project={self.project_name} dir={self.base_dir}>"
+    
+    # === Credentials Support ===
+    
+    def save_credential(self, credential: Credential) -> None:
+        """
+        Save a discovered credential.
+        
+        Args:
+            credential: Credential object to save.
+        """
+        cred_dict = credential.to_dict()
+        
+        # Check for duplicates (same host, port, service, username)
+        for i, existing in enumerate(self._credentials):
+            if (existing["host"] == cred_dict["host"] and
+                existing["port"] == cred_dict["port"] and
+                existing["service"] == cred_dict["service"] and
+                existing["username"] == cred_dict["username"]):
+                # Update existing credential
+                self._credentials[i] = cred_dict
+                self._save()
+                return
+        
+        # Add new credential
+        self._credentials.append(cred_dict)
+        self._save()
+    
+    def get_credentials(self, host_ip: Optional[str] = None) -> list[Credential]:
+        """
+        Get all credentials, optionally filtered by host.
+        
+        Args:
+            host_ip: Filter by host IP (None = all credentials).
+        
+        Returns:
+            List of Credential objects.
+        """
+        credentials = []
+        for cred_dict in self._credentials:
+            if host_ip is None or cred_dict["host"] == host_ip:
+                credentials.append(Credential.from_dict(cred_dict))
+        
+        return credentials
+    
+    def delete_credential(self, host: str, port: int, service: str, username: str) -> bool:
+        """
+        Delete a specific credential.
+        
+        Args:
+            host: Host IP/hostname
+            port: Port number
+            service: Service type
+            username: Username
+        
+        Returns:
+            True if credential was found and deleted.
+        """
+        for i, cred in enumerate(self._credentials):
+            if (cred["host"] == host and
+                cred["port"] == port and
+                cred["service"] == service and
+                cred["username"] == username):
+                del self._credentials[i]
+                self._save()
+                return True
+        
+        return False
+    
+    def get_credential_count(self) -> int:
+        """Get total number of stored credentials."""
+        return len(self._credentials)
 
 
 if __name__ == "__main__":
@@ -448,6 +528,8 @@ if __name__ == "__main__":
     stats = db.get_stats()
     for key, value in stats.items():
         print(f"{key}: {value}")
+    
+    print("\n" + "=" * 60)
     
     print("\n" + "=" * 60)
     print(f"Files created:")

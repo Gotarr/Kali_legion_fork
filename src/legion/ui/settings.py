@@ -303,6 +303,39 @@ class SettingsDialog(QDialog):
         nse_group.setLayout(nse_layout)
         layout.addWidget(nse_group)
         
+        # Hydra Settings
+        hydra_group = QGroupBox("Hydra Brute Force")
+        hydra_layout = QFormLayout()
+        
+        # Default tasks
+        self.hydra_tasks_spin = QSpinBox()
+        self.hydra_tasks_spin.setRange(1, 64)
+        self.hydra_tasks_spin.setValue(16)
+        self.hydra_tasks_spin.setSuffix(" threads")
+        hydra_layout.addRow("Default Tasks:", self.hydra_tasks_spin)
+        
+        # Default timeout
+        self.hydra_timeout_spin = QSpinBox()
+        self.hydra_timeout_spin.setRange(10, 3600)
+        self.hydra_timeout_spin.setValue(300)
+        self.hydra_timeout_spin.setSuffix(" seconds")
+        hydra_layout.addRow("Default Timeout:", self.hydra_timeout_spin)
+        
+        # Wordlist path
+        hydra_wordlist_layout = QHBoxLayout()
+        self.hydra_wordlist_edit = QLineEdit()
+        self.hydra_wordlist_edit.setPlaceholderText("Leave empty to use scripts/wordlists/")
+        hydra_wordlist_browse = QPushButton("Browse...")
+        hydra_wordlist_browse.clicked.connect(
+            lambda: self._browse_for_tool(self.hydra_wordlist_edit, is_directory=True)
+        )
+        hydra_wordlist_layout.addWidget(self.hydra_wordlist_edit)
+        hydra_wordlist_layout.addWidget(hydra_wordlist_browse)
+        hydra_layout.addRow("Wordlist Directory:", hydra_wordlist_layout)
+        
+        hydra_group.setLayout(hydra_layout)
+        layout.addWidget(hydra_group)
+        
         # Tool Cache Settings
         cache_group = QGroupBox("Tool Discovery")
         cache_layout = QFormLayout()
@@ -385,6 +418,11 @@ class SettingsDialog(QDialog):
         self.vulners_min_cvss_spin.setValue(int(self.config.scanning.vulners_min_cvss))
         self.shodan_api_key_edit.setText(self.config.scanning.shodan_api_key or "")
         
+        # Hydra
+        self.hydra_tasks_spin.setValue(self.config.tools.hydra_default_tasks)
+        self.hydra_timeout_spin.setValue(self.config.tools.hydra_default_timeout)
+        self.hydra_wordlist_edit.setText(self.config.tools.hydra_wordlist_path or "")
+        
         # Advanced (TOML)
         self._reload_toml()
     
@@ -429,6 +467,11 @@ class SettingsDialog(QDialog):
         self.config.scanning.enable_vulners = self.enable_vulners_check.isChecked()
         self.config.scanning.vulners_min_cvss = float(self.vulners_min_cvss_spin.value())
         self.config.scanning.shodan_api_key = self.shodan_api_key_edit.text() or ""
+        
+        # Hydra
+        self.config.tools.hydra_default_tasks = self.hydra_tasks_spin.value()
+        self.config.tools.hydra_default_timeout = self.hydra_timeout_spin.value()
+        self.config.tools.hydra_wordlist_path = self.hydra_wordlist_edit.text() or None
     
     def _browse_for_tool(self, line_edit: QLineEdit, is_directory: bool = False) -> None:
         """

@@ -60,6 +60,50 @@ class HydraTool(BaseTool):
     def tool_name(self) -> str:
         """Get tool name."""
         return "hydra"
+    
+    async def validate(self) -> bool:
+        """
+        Validate that Hydra is available and executable.
+        
+        Overrides BaseTool.validate() because Hydra uses -h instead of --version.
+        
+        Returns:
+            True if Hydra is available and working.
+        """
+        if not self._tool_path:
+            return False
+        
+        if not self._tool_path.exists():
+            return False
+        
+        try:
+            # Hydra uses -h, not --version
+            result = await self.run(["-h"], timeout=5.0)
+            # Hydra -h returns exit code 255, but outputs help
+            return "Hydra" in result.stdout or result.success
+        except Exception:
+            return False
+    
+    async def get_version(self) -> str:
+        """
+        Get Hydra version using -h flag instead of --version.
+        
+        Hydra doesn't support --version, so we parse from -h output.
+        The first line contains: "Hydra v9.1 (c) 2020 by van Hauser..."
+        
+        Returns:
+            Version string (e.g., "9.1") or "unknown".
+        """
+        try:
+            result = await self.run(["-h"], timeout=5.0)
+            if "Hydra" in result.stdout:
+                # Use existing _extract_version() method
+                first_line = result.stdout.split('\n')[0]
+                return self._extract_version(first_line)
+        except Exception:
+            pass
+        
+        return "unknown"
 
     async def attack(
         self,

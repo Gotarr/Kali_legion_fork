@@ -121,6 +121,16 @@ class ToolsConfig:
     searchsploit_path: Optional[str] = None
     """Custom searchsploit executable path."""
     
+    # Hydra defaults
+    hydra_default_tasks: int = 16
+    """Default number of parallel tasks for Hydra attacks."""
+    
+    hydra_default_timeout: int = 300
+    """Default timeout for Hydra attacks in seconds."""
+    
+    hydra_wordlist_path: Optional[str] = None
+    """Default path to wordlist directory (None = use scripts/wordlists/)."""
+    
     custom_paths: dict[str, str] = field(default_factory=dict)
     """Custom paths for additional tools."""
     
@@ -134,6 +144,12 @@ class ToolsConfig:
         """Validate tools configuration."""
         if self.cache_ttl < 0:
             raise ValueError("cache_ttl must be non-negative")
+        
+        if self.hydra_default_tasks < 1 or self.hydra_default_tasks > 64:
+            raise ValueError("hydra_default_tasks must be between 1 and 64")
+        
+        if self.hydra_default_timeout < 10:
+            raise ValueError("hydra_default_timeout must be at least 10 seconds")
         
         # Validate custom paths exist if specified
         for tool, path_str in [
