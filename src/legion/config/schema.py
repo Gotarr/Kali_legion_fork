@@ -34,6 +34,12 @@ class ScanningConfig:
     verbose_output: bool = False
     """Enable verbose scan output."""
     
+    screenshot_timeout: int = 15
+    """Screenshot timeout in seconds (legacy feature)."""
+    
+    web_services: str = "http,https,ssl,soap"
+    """Comma-separated list of services to treat as web services (legacy feature)."""
+    
     def validate(self) -> None:
         """Validate scanning configuration."""
         if self.timeout <= 0:
@@ -42,6 +48,8 @@ class ScanningConfig:
             raise ValueError("max_concurrent must be positive")
         if self.default_profile not in ("quick", "full", "stealth", "version", "os", "aggressive"):
             raise ValueError(f"Invalid scan profile: {self.default_profile}")
+        if self.screenshot_timeout <= 0:
+            raise ValueError("screenshot_timeout must be positive")
 
 
 @dataclass
@@ -149,6 +157,10 @@ class UIConfig:
     """Maximum rows to display in tables."""
     
     confirm_deletions: bool = True
+    """Confirm before deleting items."""
+    
+    default_terminal: str = "cmd"
+    """Default terminal to use for external commands (legacy feature)."""
     """Confirm before deleting items."""
     
     def validate(self) -> None:

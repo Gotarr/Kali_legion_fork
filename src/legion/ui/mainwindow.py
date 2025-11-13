@@ -1274,15 +1274,60 @@ class MainWindow(QMainWindow):
             filename: Path to JSON file
         """
         import json
+        from datetime import datetime
+        from legion.core.models import Host, Port
         
         with open(filename, 'r') as f:
             data = json.load(f)
         
-        # TODO: Implement database.add_host() and database.add_port() methods
-        hosts_count = len(data.get("hosts", []))
+        hosts_imported = 0
+        ports_imported = 0
         
-        self.status_label.setText(f"Imported {hosts_count} hosts from {filename}")
-        logger.info(f"Imported {hosts_count} hosts from {filename}")
+        # Handle both single host export and full project export
+        hosts_data = data.get("hosts", [])
+        
+        # If no "hosts" key, check if this is a single host export
+        if not hosts_data and "host" in data:
+            hosts_data = [data["host"]]
+            # Merge ports if they're at root level
+            if "ports" in data:
+                hosts_data[0]["ports"] = data["ports"]
+        
+        for host_data in hosts_data:
+            try:
+                # Create Host object
+                host = Host(
+                    ip=host_data["ip"],
+                    hostname=host_data.get("hostname", ""),
+                    os_name=host_data.get("os", ""),
+                    state=host_data.get("state", "unknown"),
+                    last_seen=datetime.fromisoformat(host_data["last_seen"]) if host_data.get("last_seen") else datetime.now()
+                )
+                
+                # Save host to database
+                self.database.save_host(host)
+                hosts_imported += 1
+                
+                # Import ports
+                for port_data in host_data.get("ports", []):
+                    port = Port(
+                        number=port_data["number"],
+                        protocol=port_data.get("protocol", "tcp"),
+                        state=port_data.get("state", "unknown"),
+                        service_name=port_data.get("service", ""),
+                        service_version=port_data.get("version", ""),
+                        last_seen=datetime.now()
+                    )
+                    
+                    self.database.save_port(host.ip, port)
+                    ports_imported += 1
+                    
+            except Exception as e:
+                logger.error(f"Failed to import host {host_data.get('ip', 'unknown')}: {e}")
+                continue
+        
+        self.status_label.setText(f"Imported {hosts_imported} hosts, {ports_imported} ports from {filename}")
+        logger.info(f"Imported {hosts_imported} hosts, {ports_imported} ports from {filename}")
         
         # Refresh UI
         self.hosts_model.refresh()
@@ -1290,7 +1335,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Import Complete",
-            f"Successfully imported {hosts_count} hosts from:\n{filename}"
+            f"Successfully imported:\n{hosts_imported} hosts\n{ports_imported} ports\n\nFrom: {filename}"
         )
     
     def _import_xml(self, filename: str) -> None:

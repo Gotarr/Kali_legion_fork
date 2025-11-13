@@ -135,6 +135,15 @@ class SettingsDialog(QDialog):
         self.auto_refresh_spin.setSpecialValueText("Disabled")
         ui_layout.addRow("Auto-Refresh:", self.auto_refresh_spin)
         
+        # Terminal Selection (Legacy feature)
+        self.terminal_combo = QComboBox()
+        import platform
+        if platform.system() == "Windows":
+            self.terminal_combo.addItems(["cmd", "powershell", "wt"])
+        else:
+            self.terminal_combo.addItems(["gnome-terminal", "xterm", "konsole", "terminator"])
+        ui_layout.addRow("Default Terminal:", self.terminal_combo)
+        
         ui_group.setLayout(ui_layout)
         layout.addWidget(ui_group)
         
@@ -190,6 +199,19 @@ class SettingsDialog(QDialog):
             "5 - Insane (fastest)"
         ])
         scan_layout.addRow("Timing Template:", self.timing_combo)
+        
+        # Screenshot Timeout (Legacy feature)
+        self.screenshot_timeout_spin = QSpinBox()
+        self.screenshot_timeout_spin.setRange(5, 300)
+        self.screenshot_timeout_spin.setSuffix(" seconds")
+        self.screenshot_timeout_spin.setValue(15)
+        scan_layout.addRow("Screenshot Timeout:", self.screenshot_timeout_spin)
+        
+        # Web Services (Legacy feature)
+        self.web_services_edit = QLineEdit()
+        self.web_services_edit.setPlaceholderText("http,https,ssl,soap,...")
+        self.web_services_edit.setToolTip("Comma-separated list of services to treat as web services")
+        scan_layout.addRow("Web Services:", self.web_services_edit)
         
         scan_group.setLayout(scan_layout)
         layout.addWidget(scan_group)
@@ -290,6 +312,7 @@ class SettingsDialog(QDialog):
         self.show_toolbar_check.setChecked(self.config.ui.show_toolbar)
         self.show_statusbar_check.setChecked(self.config.ui.show_statusbar)
         self.auto_refresh_spin.setValue(self.config.ui.auto_refresh_interval)
+        self.terminal_combo.setCurrentText(self.config.ui.default_terminal)
         
         self.log_level_combo.setCurrentText(self.config.logging.level)
         self.log_file_check.setChecked(self.config.logging.file_enabled)
@@ -300,6 +323,8 @@ class SettingsDialog(QDialog):
         self.scan_timeout_spin.setValue(self.config.scanning.timeout)
         self.max_concurrent_spin.setValue(self.config.scanning.max_concurrent)
         self.timing_combo.setCurrentIndex(self.config.scanning.timing_template)
+        self.screenshot_timeout_spin.setValue(self.config.scanning.screenshot_timeout)
+        self.web_services_edit.setText(self.config.scanning.web_services)
         
         self.auto_parse_check.setChecked(self.config.scanning.auto_parse)
         self.auto_save_check.setChecked(self.config.scanning.auto_save)
@@ -325,6 +350,7 @@ class SettingsDialog(QDialog):
         self.config.ui.show_toolbar = self.show_toolbar_check.isChecked()
         self.config.ui.show_statusbar = self.show_statusbar_check.isChecked()
         self.config.ui.auto_refresh_interval = self.auto_refresh_spin.value()
+        self.config.ui.default_terminal = self.terminal_combo.currentText()
         
         self.config.logging.level = self.log_level_combo.currentText()
         self.config.logging.file_enabled = self.log_file_check.isChecked()
@@ -335,6 +361,8 @@ class SettingsDialog(QDialog):
         self.config.scanning.timeout = self.scan_timeout_spin.value()
         self.config.scanning.max_concurrent = self.max_concurrent_spin.value()
         self.config.scanning.timing_template = self.timing_combo.currentIndex()
+        self.config.scanning.screenshot_timeout = self.screenshot_timeout_spin.value()
+        self.config.scanning.web_services = self.web_services_edit.text()
         
         self.config.scanning.auto_parse = self.auto_parse_check.isChecked()
         self.config.scanning.auto_save = self.auto_save_check.isChecked()
