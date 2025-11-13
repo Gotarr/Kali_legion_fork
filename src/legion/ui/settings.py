@@ -244,12 +244,12 @@ class SettingsDialog(QDialog):
         tools_layout = QFormLayout()
         
         # Helper to create path input with browse button
-        def create_path_input(label: str) -> tuple[QLineEdit, QPushButton]:
+        def create_path_input(label: str, is_directory: bool = False) -> tuple[QLineEdit, QPushButton]:
             h_layout = QHBoxLayout()
             line_edit = QLineEdit()
             browse_btn = QPushButton("Browse...")
             browse_btn.clicked.connect(
-                lambda: self._browse_for_tool(line_edit)
+                lambda: self._browse_for_tool(line_edit, is_directory)
             )
             h_layout.addWidget(line_edit)
             h_layout.addWidget(browse_btn)
@@ -263,6 +263,45 @@ class SettingsDialog(QDialog):
         
         tools_group.setLayout(tools_layout)
         layout.addWidget(tools_group)
+        
+        # NSE Scripts Settings
+        nse_group = QGroupBox("Nmap NSE Scripts")
+        nse_layout = QFormLayout()
+        
+        # NSE script path
+        nse_path_layout = QHBoxLayout()
+        self.nse_script_path_edit = QLineEdit()
+        self.nse_script_path_edit.setPlaceholderText("Leave empty to use Legion's scripts/nmap/")
+        nse_browse_btn = QPushButton("Browse...")
+        nse_browse_btn.clicked.connect(
+            lambda: self._browse_for_tool(self.nse_script_path_edit, is_directory=True)
+        )
+        nse_path_layout.addWidget(self.nse_script_path_edit)
+        nse_path_layout.addWidget(nse_browse_btn)
+        nse_layout.addRow("NSE Scripts Path:", nse_path_layout)
+        
+        # Enable NSE
+        self.enable_nse_check = QCheckBox("Enable Nmap NSE Scripts")
+        nse_layout.addRow("", self.enable_nse_check)
+        
+        # Vulners settings
+        self.enable_vulners_check = QCheckBox("Auto-run Vulners CVE scan")
+        nse_layout.addRow("", self.enable_vulners_check)
+        
+        self.vulners_min_cvss_spin = QSpinBox()
+        self.vulners_min_cvss_spin.setRange(0, 10)
+        self.vulners_min_cvss_spin.setSingleStep(1)
+        self.vulners_min_cvss_spin.setSuffix(" (0 = all)")
+        nse_layout.addRow("Min CVSS Score:", self.vulners_min_cvss_spin)
+        
+        # Shodan API key
+        self.shodan_api_key_edit = QLineEdit()
+        self.shodan_api_key_edit.setPlaceholderText("Enter Shodan API key (optional)")
+        self.shodan_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        nse_layout.addRow("Shodan API Key:", self.shodan_api_key_edit)
+        
+        nse_group.setLayout(nse_layout)
+        layout.addWidget(nse_group)
         
         # Tool Cache Settings
         cache_group = QGroupBox("Tool Discovery")
@@ -339,6 +378,13 @@ class SettingsDialog(QDialog):
         self.cache_enabled_check.setChecked(self.config.tools.cache_enabled)
         self.cache_ttl_spin.setValue(self.config.tools.cache_ttl)
         
+        # NSE Scripts
+        self.nse_script_path_edit.setText(self.config.scanning.nse_script_path or "")
+        self.enable_nse_check.setChecked(self.config.scanning.enable_nse_scripts)
+        self.enable_vulners_check.setChecked(self.config.scanning.enable_vulners)
+        self.vulners_min_cvss_spin.setValue(int(self.config.scanning.vulners_min_cvss))
+        self.shodan_api_key_edit.setText(self.config.scanning.shodan_api_key or "")
+        
         # Advanced (TOML)
         self._reload_toml()
     
@@ -376,23 +422,40 @@ class SettingsDialog(QDialog):
         
         self.config.tools.cache_enabled = self.cache_enabled_check.isChecked()
         self.config.tools.cache_ttl = self.cache_ttl_spin.value()
+        
+        # NSE Scripts
+        self.config.scanning.nse_script_path = self.nse_script_path_edit.text() or None
+        self.config.scanning.enable_nse_scripts = self.enable_nse_check.isChecked()
+        self.config.scanning.enable_vulners = self.enable_vulners_check.isChecked()
+        self.config.scanning.vulners_min_cvss = float(self.vulners_min_cvss_spin.value())
+        self.config.scanning.shodan_api_key = self.shodan_api_key_edit.text() or ""
     
-    def _browse_for_tool(self, line_edit: QLineEdit) -> None:
+    def _browse_for_tool(self, line_edit: QLineEdit, is_directory: bool = False) -> None:
         """
-        Open file browser to select tool executable.
+        Open file browser to select tool executable or directory.
         
         Args:
             line_edit: Line edit to update with selected path
+            is_directory: If True, select directory instead of file
         """
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Tool Executable",
-            "",
-            "Executables (*.exe);;All Files (*.*)"
-        )
-        
-        if file_path:
-            line_edit.setText(file_path)
+        if is_directory:
+            dir_path = QFileDialog.getExistingDirectory(
+                self,
+                "Select Directory",
+                ""
+            )
+            if dir_path:
+                line_edit.setText(dir_path)
+        else:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Select Tool Executable",
+                "",
+                "Executables (*.exe);;All Files (*.*)"
+            )
+            
+            if file_path:
+                line_edit.setText(file_path)
     
     def _reload_toml(self) -> None:
         """Reload TOML content from file."""

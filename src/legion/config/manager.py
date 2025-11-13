@@ -66,6 +66,11 @@ class ConfigManager:
         if not self.config_path.exists():
             logger.info(f"Config file not found: {self.config_path}, using defaults")
             self._config = LegionConfig()
+            
+            # Auto-discover tools on first run
+            if self._config.tools.auto_discover:
+                self._auto_discover_tools()
+            
             return self._config
         
         try:
@@ -75,6 +80,11 @@ class ConfigManager:
             logger.info(f"Loaded config from: {self.config_path}")
             self._config = self._dict_to_config(data)
             self._config.validate()
+            
+            # Auto-discover missing tools
+            if self._config.tools.auto_discover:
+                self._auto_discover_tools()
+            
             return self._config
             
         except tomllib.TOMLDecodeError as e:
@@ -83,6 +93,32 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
             raise
+    
+    def _auto_discover_tools(self) -> None:
+        """
+        Auto-discover tool paths if not already set.
+        """
+        from legion.tools.discovery import find_tool
+        
+        tools_to_discover = {
+            "nmap": "nmap_path",
+            "hydra": "hydra_path",
+            "nikto": "nikto_path",
+            "searchsploit": "searchsploit_path",
+        }
+        
+        for tool_name, config_attr in tools_to_discover.items():
+            # Skip if already configured
+            if getattr(self._config.tools, config_attr):
+                continue
+            
+            # Try to find tool
+            tool_path = find_tool(tool_name)
+            if tool_path:
+                setattr(self._config.tools, config_attr, str(tool_path))
+                logger.info(f"Auto-discovered {tool_name}: {tool_path}")
+            else:
+                logger.warning(f"Could not auto-discover {tool_name}")
     
     def save(self, config: Optional[LegionConfig] = None) -> None:
         """

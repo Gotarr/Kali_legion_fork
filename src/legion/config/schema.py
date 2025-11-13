@@ -40,6 +40,21 @@ class ScanningConfig:
     web_services: str = "http,https,ssl,soap"
     """Comma-separated list of services to treat as web services (legacy feature)."""
     
+    enable_nse_scripts: bool = True
+    """Enable Nmap NSE (Nmap Scripting Engine) scripts."""
+    
+    nse_script_path: Optional[str] = None
+    """Custom path to NSE scripts directory (None = use Legion's scripts/nmap/)."""
+    
+    enable_vulners: bool = False
+    """Automatically run Vulners NSE script for CVE detection."""
+    
+    vulners_min_cvss: float = 0.0
+    """Minimum CVSS score for Vulners reporting (0.0 = all)."""
+    
+    shodan_api_key: str = ""
+    """Shodan API key for shodan-api.nse script."""
+    
     def validate(self) -> None:
         """Validate scanning configuration."""
         if self.timeout <= 0:
@@ -50,6 +65,8 @@ class ScanningConfig:
             raise ValueError(f"Invalid scan profile: {self.default_profile}")
         if self.screenshot_timeout <= 0:
             raise ValueError("screenshot_timeout must be positive")
+        if self.vulners_min_cvss < 0.0 or self.vulners_min_cvss > 10.0:
+            raise ValueError("vulners_min_cvss must be between 0.0 and 10.0")
 
 
 @dataclass

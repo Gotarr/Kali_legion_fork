@@ -1,101 +1,128 @@
-# Legion Scripts
+# Legion Scripts Directory
 
-Scripts und Tools für erweiterte Funktionalität in Legion v2.0.
+This directory contains external scripts, tools, wordlists, and resources that Legion uses for automated scanning and exploitation tasks.
 
----
+## 📂 Structure
 
-## 📂 Struktur
-
-### nmap/
-Nmap NSE (Nmap Scripting Engine) Scripts für erweiterte Scans:
-
-- **vulners.nse** - Vulnerability Database Integration (Vulners.com)
-- **shodan-api.nse** - Shodan API Integration
-- **shodan-hq.nse** - Shodan HQ Integration
-
-**Verwendung**: Diese Scripts werden automatisch von Nmap geladen, wenn sie im richtigen Verzeichnis liegen.
-
-```bash
-# Beispiel: Vulners Scan
-nmap --script vulners -sV <target>
-
-# Beispiel: Shodan API
-nmap --script shodan-api --script-args shodan-api.apikey=<key> <target>
+```
+scripts/
+├── nmap/              ✅ Nmap NSE (Nmap Scripting Engine) scripts
+│   ├── vulners.nse         # CVE detection via vulners.com
+│   ├── shodan-api.nse      # Shodan integration
+│   └── shodan-hq.nse       # Shodan HQ variant
+│
+├── wordlists/         ✅ Password and dictionary lists
+│   ├── ftp-betterdefaultpasslist.txt
+│   ├── ssh-betterdefaultpasslist.txt
+│   ├── mysql-betterdefaultpasslist.txt
+│   ├── mssql-betterdefaultpasslist.txt
+│   ├── oracle-betterdefaultpasslist.txt
+│   ├── postgres-betterdefaultpasslist.txt
+│   ├── telnet-betterdefaultpasslist.txt
+│   ├── vnc-betterdefaultpasslist.txt
+│   ├── windows-betterdefaultpasslist.txt
+│   ├── db2-betterdefaultpasslist.txt
+│   ├── tomcat-betterdefaultpasslist.txt
+│   ├── routers-userpass.txt
+│   ├── root-userpass.txt
+│   ├── snmp-default.txt
+│   ├── ssh-password.txt
+│   ├── ssh-user.txt
+│   └── gvit_subdomain_wordlist.txt
+│
+├── nikto/             📋 TODO: Nikto plugins and databases
+│   └── (to be added in Phase 6, Task 3)
+│
+├── hydra/             📋 TODO: Hydra custom modules (optional)
+│   └── (custom protocol modules)
+│
+├── metasploit/        📋 TODO: Custom Metasploit modules
+│   ├── exploits/
+│   ├── payloads/
+│   └── auxiliary/
+│
+├── exploits/          📋 TODO: Custom exploit scripts
+│   └── (Python/Bash exploit scripts)
+│
+├── exec-in-shell      ⚠️  Legacy script (review needed)
+└── README.md          # This file
 ```
 
-### legacy/
-Archivierte Scripts aus Legion v1.x - **nicht kompatibel mit v2.0**.
+## 🔄 Integration Status
 
-Siehe **[legacy/README.md](legacy/README.md)** für Details.
+| Directory      | Status | Phase | Description |
+|----------------|--------|-------|-------------|
+| `nmap/`        | ✅ Done | 6.2 | NSE scripts integrated into NmapTool |
+| `wordlists/`   | ✅ Done | 6.2 | Ready for Hydra/Gobuster/custom tools |
+| `nikto/`       | 📋 TODO | 6.3 | Nikto plugins and vulnerability databases |
+| `hydra/`       | 📋 TODO | 6.3+ | Custom Hydra protocol modules (optional) |
+| `metasploit/`  | 📋 TODO | 7+ | Custom MSF modules for Legion |
+| `exploits/`    | 📋 TODO | 7+ | Custom exploit scripts (Python/Bash) |
 
----
+## 🛠️ Usage in Legion v2.0
 
-## 🔧 Verwendung in Legion v2.0
+### Nmap NSE Scripts ✅
 
-### Nmap Scripts
-Legion v2.0 kann diese NSE Scripts automatisch nutzen:
-
-1. **Automatisch**: Wenn Nmap die Scripts findet
-2. **Manuell**: Über Custom Scan-Profile in Settings
-
-**Konfiguration**:
-```toml
-# legion.toml
-[scanning]
-nmap_script_path = "scripts/nmap"
-```
-
-### Eigene Scripts hinzufügen
-
-Für neue v2.0-kompatible Scripts:
-
-1. Erstelle `scripts/custom/` Verzeichnis
-2. Implementiere mit neuem `SimpleDatabase` API
-3. Dokumentiere in diesem README
-
-**Beispiel-Struktur**:
+**Python API:**
 ```python
-# scripts/custom/my_script.py
-from legion.core.database import SimpleDatabase
+from legion.tools.nmap import NmapTool
 
-class MyScript:
-    def __init__(self, database: SimpleDatabase):
-        self.db = database
-    
-    def run(self, host_ip: str):
-        # Implementierung
-        pass
+nmap = NmapTool()
+
+# Vulners CVE scan (CVSS >= 7.0)
+result = await nmap.scan_with_vulners("192.168.1.1", min_cvss=7.0)
+
+# Shodan scan
+result = await nmap.scan_with_shodan("8.8.8.8", api_key="YOUR_KEY")
 ```
 
----
+**CLI:**
+```bash
+nmap -sV --script vulners --script-args mincvss=7.0 192.168.1.1
+```
 
-## ⚠️ Wichtige Hinweise
+### Wordlists ✅
 
-### Legacy Scripts (scripts/legacy/)
-- ❌ **Nicht kompatibel** mit v2.0 `SimpleDatabase`
-- ❌ Verwenden altes SQLAlchemy API
-- ❌ Hardcoded credentials (Sicherheitsrisiko!)
-- ✅ Nur für Referenz archiviert
+**Python API:**
+```python
+from pathlib import Path
+from legion.tools.hydra import HydraTool
 
-### Migration
-Wenn du Legacy-Scripts portieren möchtest:
+wordlist_dir = Path("scripts/wordlists")
+ssh_passwords = wordlist_dir / "ssh-betterdefaultpasslist.txt"
 
-1. Ersetze `self.session` mit `SimpleDatabase` calls
-2. Ersetze `self.dbHost` mit `Host` model
-3. Entferne hardcoded API keys
-4. Nutze Config-System für Credentials
+hydra = HydraTool()
+result = await hydra.attack(
+    target="192.168.1.1",
+    service="ssh",
+    login_list=["root", "admin"],
+    password_file=ssh_passwords
+)
+```
 
-Siehe **[docs/ARCHITECTURE_DETAILS.md](../docs/ARCHITECTURE_DETAILS.md)** für neue API.
+### Nikto 📋 TODO
+**Planned for Phase 6, Task 3**
 
----
+### Hydra Modules 📋 TODO
+**Optional custom protocol modules**
 
-## 📚 Weitere Ressourcen
+### Metasploit 📋 TODO
+**Planned for Phase 7+**
 
-- **Nmap NSE Scripts**: https://nmap.org/nsedoc/
-- **Vulners API**: https://vulners.com/api
-- **Shodan API**: https://developer.shodan.io/
+### Exploits 📋 TODO
+**Planned for Phase 7+**
+
+## 📚 References
+
+- [Nmap NSE](https://nmap.org/book/nse.html)
+- [Vulners](https://github.com/vulnersCom/nmap-vulners)
+- [Shodan API](https://developer.shodan.io/)
+- [Nikto](https://github.com/sullo/nikto)
+- [Hydra](https://github.com/vanhauser-thc/thc-hydra)
+- [Metasploit](https://docs.metasploit.com/)
 
 ---
 
 **Version**: 2.0.0-alpha6  
-**Letzte Aktualisierung**: 13. November 2025
+**Last Updated**: 13. November 2025  
+**Phase**: 6 (Tool Integration - 30%)
