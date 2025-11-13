@@ -109,36 +109,39 @@ tmp/
 # init
 .initialized
 
-# extension scripts
-scripts/ms08-067_check.py
-scripts/ndr.py
-scripts/rdp-sec-check.pl
-scripts/smbenum.sh
-scripts/snmpbrute.py
-scripts/installDeps.sh
-scripts/smtp-user-enum.pl
-scripts/snmpcheck.rb
+# IDE
+.vscode/
+.idea/
 
-scripts/CloudFail
-
+# Docker scripts
 docker/runLocal.sh
 docker/cleanupUntagged.sh
 docker/cleanupExited.sh
 
+# Legacy artifacts
 log/*.log
 fixname.sh
 ghostdriver.log
 
-# Legion v2.0 - Phase 1-5 artifacts
+# Legion v2.0 - Phase 1-6 artifacts
 scan_results/
+scan_logs/
 log/
 backup/
+_export/
 *.db
 *.sqlite
 *.sqlite3
 huge_nmap.xml
 
+# User configuration (generated at runtime)
+legion.toml
+config.toml
+
 # Temporary test databases
 tests/**/*.db
 tests/**/*.sqlite
 tests/**/*.json
+
+# Legacy scripts (archived)
+scripts/legacy/python/__pycache__/

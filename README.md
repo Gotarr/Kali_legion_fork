@@ -7,15 +7,17 @@ The Legion repository is moving to https://github.com/hackman238/legion. All fut
 **This fork is currently undergoing a complete cross-platform rewrite.**  
 See **[STATUS.md](STATUS.md)** for details.
 
-**Phase 6: Additional Tools** - 15% Complete (1/7 Tasks) 🚧
+**Phase 6: Additional Tools** - 30% Complete (2/7 Tasks) 🚧
 - ✅ Phase 5: UI Migration - **100% COMPLETE!**
 - ✅ Task 1: UI Finalisierung (JSON Import + Legacy Settings) - **13.11.2025**
-- 📋 Task 2: Tool Wrapper für Hydra, Nikto, Searchsploit (next)
+- ✅ Task 2: Hydra Integration (Wrapper, Parser, Tests) - **13.11.2025**
+- 📋 Task 3: Nikto/Searchsploit/Gobuster Integration (next)
 
 **Latest Updates (13.11.2025)**:
+- ✅ **Hydra Integration**: Full wrapper with parser, tests, documentation
 - ✅ **JSON Import**: Full implementation (single/multi-host format)
 - ✅ **Legacy Settings**: Terminal selection, Screenshot timeout, Web Services
-- ✅ **User Testing**: All features validated and working
+- ✅ **Tool Registry**: Extended with Hydra auto-discovery (Windows/Linux/macOS)
 
 Full progress: **[STATUS.md](STATUS.md)** | **[docs/PHASE6_TASK1_SUMMARY.md](docs/PHASE6_TASK1_SUMMARY.md)**
 

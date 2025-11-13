@@ -378,18 +378,27 @@ def discover_all_tools(
     # Default common pentesting tools
     if tool_names is None:
         tool_names = [
+            # Tier 1: Essential reconnaissance and scanning
             "nmap",
+            
+            # Tier 2: Brute-force and password attacks
             "hydra",
+            
+            # Tier 3: Web scanning and enumeration
             "nikto",
-            "searchsploit",
-            "sqlmap",
-            "dirb",
             "gobuster",
+            "dirb",
+            
+            # Tier 4: Exploit databases and frameworks
+            "searchsploit",
+            "metasploit",
+            "msfconsole",
+            
+            # Tier 5: Specialized tools
+            "sqlmap",
             "wpscan",
             "enum4linux",
             "smbclient",
-            "metasploit",
-            "msfconsole",
         ]
     
     results: dict[str, Optional[Path]] = {}

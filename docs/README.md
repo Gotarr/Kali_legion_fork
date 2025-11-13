@@ -3,7 +3,7 @@
 Zentrale Dokumentation für die Cross-Platform Migration von Legion.
 
 **Letztes Update**: 13. November 2025  
-**Aktueller Status**: Phase 6 (15%) - Additional Tools
+**Aktueller Status**: Phase 6 (30%) - Additional Tools (Hydra Integration ✅)
 
 ---
 
@@ -56,7 +56,7 @@ Zentrale Dokumentation für die Cross-Platform Migration von Legion.
 
 | Phase | Datei | Status | Progress |
 |-------|-------|--------|----------|
-| **Phase 6** | Additional Tools | 🚧 In Progress | 15% (1/7) |
+| **Phase 6** | Additional Tools | 🚧 In Progress | 30% (2/7) |
 
 **Completed Tasks**:
 - ✅ Task 1: [PHASE6_TASK1_SUMMARY.md](PHASE6_TASK1_SUMMARY.md) - JSON Import + Legacy Settings (13.11.2025)

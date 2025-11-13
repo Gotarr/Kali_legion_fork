@@ -15,7 +15,7 @@
 | **3. Core Logic** | ✅ Complete | 100% |
 | **4. Configuration** | ✅ Complete | 100% |
 | **5. UI Migration** | ✅ Complete | 100% |
-| **6. Additional Tools** | 🚧 In Progress | 15% |
+| **6. Additional Tools** | 🚧 In Progress | 30% |
 | **7. Testing & Polish** | 📋 Planned | 0% |
 | **8. Legacy Cleanup** | 📋 Planned | 0% |
 
@@ -47,7 +47,7 @@
 
 ## 🔧 Phase 6: Additional Tools (🚧 IN ARBEIT)
 
-**Fortschritt**: 1/7 Tasks (15%)  
+**Fortschritt**: 2/7 Tasks (30%)  
 **Ziel**: Integration weiterer Tools (Hydra, Nikto, Searchsploit) über das bestehende Discovery/Registry/Wrapper-System + Finalisierung UI Features.
 
 ### Tasks
@@ -55,22 +55,31 @@
 | # | Task | Status | Details |
 |---|------|--------|---------|
 | 1 | UI Finalisierung | ✅ 100% | **JSON Import + Legacy Settings (13.11.25)** |
-| 2 | Wrapper-Gerüst erstellen | ⏳ 0% | BaseTool-Subklassen + minimaler execute()/parse_output() Stub |
-| 3 | Registry-Wiring | ⏳ 0% | Tools in Registry/Cache verfügbar machen |
-| 4 | Async-Ausführung & Abbruch | ⏳ 0% | Zeitlimits, Cancel-Unterstützung analog Nmap |
-| 5 | Ergebnis-Parsing | ⏳ 0% | Basis-Parser (stdout/JSON/XML, je Tool) |
-| 6 | UI Hooks | ⏳ 0% | Menü-/Kontext-Aktionen, einfache Dialoge |
-| 7 | Logging & Tests | ⏳ 0% | Ereignis-Logging, minimale Integrationstests |
+| 2 | Hydra Integration | ✅ 100% | **Wrapper, Parser, Tests, Docs (13.11.25)** |
+| 3 | Tool Discovery erweitern | ⏳ 50% | Hydra in Registry, weitere Tools folgen |
+| 4 | Nikto Integration | ⏳ 0% | BaseTool-Subklasse + Parser |
+| 5 | Searchsploit Integration | ⏳ 0% | Exploit-DB Wrapper |
+| 6 | Gobuster Integration | ⏳ 0% | Directory brute-force |
+| 7 | UI Hooks & Testing | ⏳ 0% | Menü-Aktionen, Integration tests |
 
 **🎉 Heute Abgeschlossen (13.11.2025)**:
 - ✅ **JSON Import**: Vollständige Implementierung (Single-/Multi-Host Format, Database Integration)
 - ✅ **Legacy Settings**: Terminal-Auswahl, Screenshot Timeout, Web Services Liste
 - ✅ **Config Schema**: Erweitert um 3 neue Felder (default_terminal, screenshot_timeout, web_services)
-- ✅ **User Testing**: Beide Features validiert und funktionsfähig
+- ✅ **Hydra Integration**: 
+  - ✅ HydraTool wrapper (tool.py) mit attack() method
+  - ✅ HydraOutputParser mit regex-basiertem Parsing
+  - ✅ HydraResult/Credential/Statistics Datenmodelle
+  - ✅ Tool Registry Integration (auto-discovery)
+  - ✅ Unit tests (test_hydra_parser.py - 15+ tests)
+  - ✅ Integration tests (test_hydra_tool.py)
+  - ✅ Vollständige Dokumentation (HYDRA_INTEGRATION.md)
+  - ✅ Cross-platform Support (Windows/Linux/macOS)
 
 **Nächste Schritte**:
-- Tool Discovery für Hydra, Nikto, Searchsploit erweitern
-- Wrapper-Gerüste für zusätzliche Tools anlegen
+- Nikto Wrapper implementieren
+- Searchsploit Integration
+- Gobuster für Directory Brute-Force
 
 ---
 
