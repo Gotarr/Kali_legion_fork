@@ -2,7 +2,7 @@
 
 **Status**: Phase 6 (Additional Tools) - 🚧 IN PROGRESS  
 **Version**: 2.0.0-alpha6  
-**Datum**: 12. November 2025
+**Datum**: 13. November 2025
 
 ---
 
@@ -15,7 +15,7 @@
 | **3. Core Logic** | ✅ Complete | 100% |
 | **4. Configuration** | ✅ Complete | 100% |
 | **5. UI Migration** | ✅ Complete | 100% |
-| **6. Additional Tools** | � In Progress | 0% |
+| **6. Additional Tools** | 🚧 In Progress | 15% |
 | **7. Testing & Polish** | 📋 Planned | 0% |
 | **8. Legacy Cleanup** | 📋 Planned | 0% |
 
@@ -47,14 +47,14 @@
 
 ## 🔧 Phase 6: Additional Tools (🚧 IN ARBEIT)
 
-**Fortschritt**: 0/7 Tasks (0%)  
-**Ziel**: Integration weiterer Tools (Hydra, Nikto, Searchsploit) über das bestehende Discovery/Registry/Wrapper-System.
+**Fortschritt**: 1/7 Tasks (15%)  
+**Ziel**: Integration weiterer Tools (Hydra, Nikto, Searchsploit) über das bestehende Discovery/Registry/Wrapper-System + Finalisierung UI Features.
 
 ### Tasks
 
 | # | Task | Status | Details |
 |---|------|--------|---------|
-| 1 | Tool Discovery erweitern | ⏳ 0% | Suchpfade/Erkennung für hydra, nikto, searchsploit |
+| 1 | UI Finalisierung | ✅ 100% | **JSON Import + Legacy Settings (13.11.25)** |
 | 2 | Wrapper-Gerüst erstellen | ⏳ 0% | BaseTool-Subklassen + minimaler execute()/parse_output() Stub |
 | 3 | Registry-Wiring | ⏳ 0% | Tools in Registry/Cache verfügbar machen |
 | 4 | Async-Ausführung & Abbruch | ⏳ 0% | Zeitlimits, Cancel-Unterstützung analog Nmap |
@@ -62,10 +62,15 @@
 | 6 | UI Hooks | ⏳ 0% | Menü-/Kontext-Aktionen, einfache Dialoge |
 | 7 | Logging & Tests | ⏳ 0% | Ereignis-Logging, minimale Integrationstests |
 
-**Nächste Schritte (kurzfristig)**:
-- Modulstruktur prüfen und Wrapper-Stubs anlegen (hydra/, nikto/, searchsploit/)
-- Registry/Discovery um Toolnamen erweitern, erste Verfügbarkeitserkennung
-- Status in UI/Logs sichtbar machen (nur Dev-Menü, noch ohne UI-Workflow)
+**🎉 Heute Abgeschlossen (13.11.2025)**:
+- ✅ **JSON Import**: Vollständige Implementierung (Single-/Multi-Host Format, Database Integration)
+- ✅ **Legacy Settings**: Terminal-Auswahl, Screenshot Timeout, Web Services Liste
+- ✅ **Config Schema**: Erweitert um 3 neue Felder (default_terminal, screenshot_timeout, web_services)
+- ✅ **User Testing**: Beide Features validiert und funktionsfähig
+
+**Nächste Schritte**:
+- Tool Discovery für Hydra, Nikto, Searchsploit erweitern
+- Wrapper-Gerüste für zusätzliche Tools anlegen
 
 ---
 
@@ -135,7 +140,8 @@ legion.py              # ✅ Production Launcher (40 Zeilen)
 - **[docs/PHASE2_SUMMARY.md](docs/PHASE2_SUMMARY.md)**: Tool Discovery ✅
 - **[docs/PHASE3_SUMMARY.md](docs/PHASE3_SUMMARY.md)**: Core Logic ✅
 - **[docs/PHASE4_SUMMARY.md](docs/PHASE4_SUMMARY.md)**: Configuration ✅
-- **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)**: UI Migration 🔄
+- **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)**: UI Migration ✅
+- **[docs/PHASE6_TASK1_SUMMARY.md](docs/PHASE6_TASK1_SUMMARY.md)**: JSON Import + Legacy Settings ✅
 
 ### Technische Details
 - **[docs/ARCHITECTURE_DETAILS.md](docs/ARCHITECTURE_DETAILS.md)**: API-Dokumentation
@@ -150,19 +156,17 @@ legion.py              # ✅ Production Launcher (40 Zeilen)
 
 ## 🎯 Aktueller Fokus
 
-**Nächste Phase**: Phase 6 - Additional Tools Integration
+**Aktuell**: Phase 6 - UI Finalisierung & Additional Tools (15%)
 
-**Optionen**:
-1. **Additional Tools**: Hydra, Nikto, Searchsploit Wrapper
+**Heute Abgeschlossen (13.11.2025)**:
+- ✅ **JSON Import**: Full Implementation mit Single-/Multi-Host Support
+- ✅ **Legacy Settings**: Terminal, Screenshot Timeout, Web Services
+- ✅ **Testing**: User-validiert, alle Features funktionsfähig
+
+**Nächste Schritte**:
+1. **Tool Discovery erweitern**: Hydra, Nikto, Searchsploit
 2. **Testing & Polish**: Comprehensive Testing Suite
-3. **Legacy Cleanup**: Alte `_old/` Dateien analysieren und aufräumen
-
-**Phase 5 Erfolge**:
-- ✅ Production-ready UI
-- ✅ Alle Legacy-Features portiert
-- ✅ Moderne Architektur (MVC, Async, Qt6)
-- ✅ Export/Import, Context-Menüs, Shortcuts
-- ✅ 3,500+ Zeilen Production Code
+3. **Legacy Cleanup**: `_old/` Verzeichnis aufräumen
 
 ---
 
@@ -193,7 +197,7 @@ legion.py              # ✅ Production Launcher (40 Zeilen)
 - ✅ Legacy Migration (legion.conf → legion.toml)
 - ✅ Default Settings & Validation
 
-### UI Migration (Phase 5)
+### UI Migration (Phase 5) + Phase 6 Extensions
 - ✅ MainWindow mit Menus/Toolbar/Statusbar
 - ✅ HostsTableModel & PortsTableModel
 - ✅ Master-Detail Pattern
@@ -203,7 +207,8 @@ legion.py              # ✅ Production Launcher (40 Zeilen)
 - ✅ Settings Dialog (4 Tabs)
 - ✅ Context Menus (Host & Port)
 - ✅ Keyboard Shortcuts (15+)
-- ✅ Export/Import (JSON & XML)
+- ✅ Export/Import (JSON & XML) - **Full Implementation (13.11.25)**
+- ✅ Legacy Settings (Terminal, Screenshot, Web Services) - **13.11.25**
 - ✅ Manual Testing Complete
 
 ---

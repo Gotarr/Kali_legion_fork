@@ -7,16 +7,17 @@ The Legion repository is moving to https://github.com/hackman238/legion. All fut
 **This fork is currently undergoing a complete cross-platform rewrite.**  
 See **[STATUS.md](STATUS.md)** for details.
 
-**Phase 5: UI Migration** - 75% Complete (6/8 Tasks) ✅
-- ✅ Task 1: UI Architecture Setup
-- ✅ Task 2: Database Bridge & Models  
-- ✅ Task 3: Scanner Integration (qasync fix!)
-- ✅ Task 4: Production Integration
-- ✅ Task 5: Cleanup & Consolidation
-- ✅ Task 6: Settings Dialog
-- 📋 Task 7: Main Window Migration (next)
+**Phase 6: Additional Tools** - 15% Complete (1/7 Tasks) 🚧
+- ✅ Phase 5: UI Migration - **100% COMPLETE!**
+- ✅ Task 1: UI Finalisierung (JSON Import + Legacy Settings) - **13.11.2025**
+- 📋 Task 2: Tool Wrapper für Hydra, Nikto, Searchsploit (next)
 
-Full progress: **[docs/PHASE5_SUMMARY.md](docs/PHASE5_SUMMARY.md)**
+**Latest Updates (13.11.2025)**:
+- ✅ **JSON Import**: Full implementation (single/multi-host format)
+- ✅ **Legacy Settings**: Terminal selection, Screenshot timeout, Web Services
+- ✅ **User Testing**: All features validated and working
+
+Full progress: **[STATUS.md](STATUS.md)** | **[docs/PHASE6_TASK1_SUMMARY.md](docs/PHASE6_TASK1_SUMMARY.md)**
 
 ---
 
@@ -43,6 +44,8 @@ py legion.py
 - ✅ Settings dialog (4 tabs!)
 - ✅ Auto-refresh tables
 - ✅ Color-coded results
+- ✅ JSON/XML Import & Export
+- ✅ Legacy settings (Terminal, Screenshots, Web Services)
 
 ##
 
