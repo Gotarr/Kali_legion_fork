@@ -35,11 +35,13 @@
 | No-Username Services | ✅ Config-basiert | ⚠️ Nicht implementiert | ❌ **FEHLT** |
 | No-Password Services | ✅ Config-basiert | ⚠️ Nicht implementiert | ❌ **FEHLT** |
 | **UI & UX** |
-| Dedizierter Brute-Tab | ✅ Eigener Tab-Bereich | ❌ Nur Main Window | ⚠️ Unterschied |
-| Live Output Display | ✅ QPlainTextEdit | ❌ Nur Progress Dialog | ⚠️ **FEHLT** |
-| Tab Blinking bei Fund | ✅ Roter Tab bei Erfolg | ❌ Nicht implementiert | ❌ **FEHLT** |
-| Kill/Cancel Button | ✅ Button wechselt | ✅ Cancel im Dialog | ✅ Gleich |
-| Progress Indication | ⚠️ Nur "Running" | ✅ Timer + Elapsed Time | ✅ Verbessert |
+| Dedizierter Brute-Tab | ✅ Eigener Tab-Bereich | ✅ Brute-Tab mit Sub-Tabs | ✅ Gleich |
+| Live Output Display | ✅ QPlainTextEdit | ✅ Dark Console mit Live-Stream | ✅ Gleich |
+| Tab Blinking bei Fund | ✅ Roter Tab bei Erfolg | ✅ Rot bei Credentials | ✅ Gleich |
+| Kill/Cancel Button | ✅ Button wechselt | ✅ Run/Stop Toggle | ✅ Gleich |
+| Progress Indication | ⚠️ Nur "Running" | ✅ Live Output + Stats | ✅ Verbessert |
+| Tab Closable | ✅ Tabs schließbar | ✅ Mit Confirmation | ✅ Gleich |
+| Multiple Attacks | ✅ Parallel in Tabs | ✅ Parallel in Tabs | ✅ Gleich |
 | **Results Handling** |
 | Output File | ✅ Hydra `-o` Flag | ✅ HydraTool managed | ✅ Gleich |
 | Parse Results | ✅ Regex-basiert | ✅ HydraOutputParser | ✅ Verbessert |
@@ -68,12 +70,15 @@
 
 ### ✅ **Verbesserungen im neuen Legion**
 1. **Combo-Mode Support**: Native `-C` Unterstützung für user:pass Dateien
-2. **Smart Wordlist Strategy**: Automatische Analyse und Optimierung
+2. **Smart Wordlist Strategy**: Automatische Analyse und Optimierung (1501 unique entries)
 3. **Port-State Check**: Hydra nur für offene Ports
-4. **Besseres Progress Feedback**: Timer mit Elapsed Time
-5. **Tool Discovery**: Auto-Registry statt manueller Config
-6. **Moderne Code-Architektur**: Async/await, Tool-API, Parser-Module
-7. **Cancel verbessert**: taskkill für Windows
+4. **Live Output Console**: Dark theme mit Syntax-Highlighting (Credentials grün, Errors rot)
+5. **Tab-basiertes System**: Brute-Tab mit Sub-Tabs für jeden Attack (wie Legacy)
+6. **Tab Blinking**: Rote Tabs bei Credential-Fund
+7. **Tool Discovery**: Auto-Registry statt manueller Config
+8. **Moderne Code-Architektur**: Async/await, Tool-API, Parser-Module, BruteWidget
+9. **Cancel verbessert**: taskkill für Windows + sofortiges Kill
+10. **Run/Stop Toggle**: Button wechselt zwischen Run und Stop
 
 ### ❌ **Fehlende Features vs. Legacy**
 1. **Single User/Pass**: Keine `-l`/`-p` Optionen
@@ -81,10 +86,8 @@
 3. **Attack Modifiers**: Keine `-u`/`-f`/`-V` Flags
 4. **Additional Options**: Kein Freitext-Feld für Custom Args
 5. **HTTP Form Support**: Keine Warnung/Hilfe für Forms
-6. **Live Output**: Kein Live-Stream während Attack
-7. **Tab Blinking**: Keine visuelle Benachrichtigung bei Fund
-8. **Scheduler**: Keine Auto-Attacks aus legion.conf
-9. **Duplicate Prevention**: Keine Tab-Name Checks
+6. **Scheduler**: Keine Auto-Attacks aus legion.conf
+7. **Duplicate Prevention**: Keine Tab-Name Checks
 
 ### 🔧 **Empfohlene Next Steps**
 
@@ -92,14 +95,14 @@
 - [ ] Single User/Pass Support (`-l`, `-p`)
 - [ ] Exit on First Valid Flag (`-f`)
 - [ ] Additional Options Freitext-Feld
-- [ ] Live Output während Attack (wie Legacy)
+- [x] ~~Live Output während Attack (wie Legacy)~~ ✅ **IMPLEMENTIERT**
 
 #### **Priorität 2 - UX Improvements**
 - [ ] Verbose Mode (`-V`) Toggle
 - [ ] Loop Users (`-u`) Toggle
 - [ ] Blank Password (`-e n`) Check
 - [ ] Login as Password (`-e s`) Check
-- [ ] Visual Feedback bei Success (Tab Blinking)
+- [x] ~~Visual Feedback bei Success (Tab Blinking)~~ ✅ **IMPLEMENTIERT**
 
 #### **Priorität 3 - Advanced**
 - [ ] HTTP Form Field Support & Warnings
@@ -174,12 +177,19 @@ if self.checkAddMoreOptions.isChecked():
 
 ## Fazit
 
-Das neue Legion hat eine **deutlich bessere Architektur** und einige **moderne Verbesserungen** (Combo-Mode, Smart Strategy, Port-Check), aber es fehlen wichtige **Hydra-Features** die Power-User brauchen:
+Das neue Legion hat eine **deutlich bessere Architektur** und **moderne Verbesserungen** (Combo-Mode, Smart Strategy, Port-Check, Live-Output-Tab-System), aber es fehlen noch einige **Hydra-Features** die Power-User brauchen:
 
-- **Single credential testing** (schnelle Tests)
+### ✅ **Bereits implementiert (Nov 2025)**
+- ✅ **Live output** - Dark Console mit Syntax-Highlighting
+- ✅ **Tab system** - Brute-Tab mit Sub-Tabs für jeden Attack
+- ✅ **Tab blinking** - Rote Tabs bei Credential-Fund
+- ✅ **Run/Stop toggle** - Button wechselt wie Legacy
+- ✅ **Smart wordlist strategy** - Auto-Analyse und Combo-Mode
+
+### ⚠️ **Noch zu implementieren**
+- **Single credential testing** (schnelle Tests mit `-l`/`-p`)
 - **Attack modifiers** (-u, -f, -V für Kontrolle)
 - **Credential helpers** (-e ns für blank/login-as-pass)
-- **Live output** (wichtig für lange Attacks)
 - **Additional options** (für Edge-Cases & Custom Services)
 
-**Recommendation**: Die fehlenden Flags sollten nachgerüstet werden, besonders `-l/-p`, `-f`, `-V` und das Additional Options Feld. Die Smart Wordlist Strategy ist ein Alleinstellungsmerkmal und sollte beibehalten werden!
+**Recommendation**: Die fehlenden Flags sollten nachgerüstet werden, besonders `-l/-p`, `-f`, `-V` und das Additional Options Feld. Die Smart Wordlist Strategy und das Tab-basierte Live-Output-System sind Alleinstellungsmerkmale und übertreffen Legacy in UX!
