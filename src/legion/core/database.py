@@ -72,20 +72,36 @@ class SimpleDatabase:
     def _load(self) -> None:
         """Load data from JSON files."""
         if self.hosts_file.exists():
-            with open(self.hosts_file, 'r') as f:
-                self._hosts = json.load(f)
+            try:
+                with open(self.hosts_file, 'r') as f:
+                    self._hosts = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Warning: hosts.json is corrupted ({e}). Starting fresh.")
+                self._hosts = {}
         
         if self.ports_file.exists():
-            with open(self.ports_file, 'r') as f:
-                self._ports = json.load(f)
+            try:
+                with open(self.ports_file, 'r') as f:
+                    self._ports = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Warning: ports.json is corrupted ({e}). Starting fresh.")
+                self._ports = {}
         
         if self.services_file.exists():
-            with open(self.services_file, 'r') as f:
-                self._services = json.load(f)
+            try:
+                with open(self.services_file, 'r') as f:
+                    self._services = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Warning: services.json is corrupted ({e}). Starting fresh.")
+                self._services = {}
         
         if self.credentials_file.exists():
-            with open(self.credentials_file, 'r') as f:
-                self._credentials = json.load(f)
+            try:
+                with open(self.credentials_file, 'r') as f:
+                    self._credentials = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Warning: credentials.json is corrupted ({e}). Starting fresh.")
+                self._credentials = []
     
     def _save(self) -> None:
         """Save data to JSON files."""

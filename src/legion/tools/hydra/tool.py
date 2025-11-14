@@ -109,6 +109,8 @@ class HydraTool(BaseTool):
         self,
         target: str,
         service: str,
+        login: Optional[str] = None,
+        password: Optional[str] = None,
         login_list: Optional[List[str]] = None,
         password_list: Optional[List[str]] = None,
         login_file: Optional[Path] = None,
@@ -123,6 +125,7 @@ class HydraTool(BaseTool):
         Perform a Hydra brute-force attack.
         
         You must provide either:
+        - login/password (single credentials)
         - login_list/password_list
         - login_file/password_file
         - combo_file (colon-separated user:pass file)
@@ -130,6 +133,8 @@ class HydraTool(BaseTool):
         Args:
             target: Target IP, hostname, or CIDR range.
             service: Service to attack (ssh, ftp, http-post-form, etc.).
+            login: Single username to try.
+            password: Single password to try.
             login_list: List of usernames to try.
             password_list: List of passwords to try.
             login_file: Path to file with usernames (one per line).
@@ -144,6 +149,14 @@ class HydraTool(BaseTool):
             ToolResult with attack output and parsed credentials.
         
         Example:
+            >>> # Attack with single credentials
+            >>> result = await hydra.attack(
+            ...     target="192.168.1.1",
+            ...     service="ssh",
+            ...     login="admin",
+            ...     password="password123"
+            ... )
+            
             >>> # Attack SSH with username/password lists
             >>> result = await hydra.attack(
             ...     target="192.168.1.1",
@@ -168,22 +181,26 @@ class HydraTool(BaseTool):
             args.extend(["-C", str(combo_file)])
         else:
             # Login source
-            if login_list:
-                for login in login_list:
-                    args.extend(["-l", login])
+            if login:
+                args.extend(["-l", login])
+            elif login_list:
+                for login_item in login_list:
+                    args.extend(["-l", login_item])
             elif login_file:
                 args.extend(["-L", str(login_file)])
             else:
-                raise ValueError("Must provide login_list or login_file")
+                raise ValueError("Must provide login, login_list, or login_file")
             
             # Password source
-            if password_list:
-                for password in password_list:
-                    args.extend(["-p", password])
+            if password:
+                args.extend(["-p", password])
+            elif password_list:
+                for password_item in password_list:
+                    args.extend(["-p", password_item])
             elif password_file:
                 args.extend(["-P", str(password_file)])
             else:
-                raise ValueError("Must provide password_list or password_file")
+                raise ValueError("Must provide password, password_list, or password_file")
         
         # Add parallel tasks
         args.extend(["-t", str(tasks)])

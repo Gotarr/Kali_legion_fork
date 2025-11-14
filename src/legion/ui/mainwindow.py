@@ -10,6 +10,7 @@ Modernized version of legacy UI with:
 
 from pathlib import Path
 from typing import Optional, Callable
+from datetime import datetime
 import logging
 import asyncio
 
@@ -25,6 +26,9 @@ from legion.ui.models import HostsTableModel, PortsTableModel
 from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog, AddHostDialog
 from legion.ui.settings import SettingsDialog
 from legion.ui.brute_widget import BruteWidget
+from legion.ui.hydra_services_widget import HydraServicesWidget
+from legion.ui.hydra_history_widget import HydraHistoryWidget, AttackRecord
+from legion.ui.results_widget import ResultsWidget, CredentialResult
 from legion.tools.hydra import HydraTool
 from legion.utils.wordlists import get_service_wordlists, export_credentials_to_wordlist
 from legion.utils.wordlist_processor import WordlistProcessor
@@ -160,15 +164,18 @@ class MainWindow(QMainWindow):
     
     def _setup_main_content(self) -> None:
         """Setup main content area."""
-        # Main tab widget (like legacy: Hosts, Brute, Services, etc.)
+        # Main tab widget (like legacy: Hosts, Hydra, Results, Services, etc.)
         self.main_tabs = QtWidgets.QTabWidget()
         self.main_layout.addWidget(self.main_tabs)
         
         # Tab 1: Hosts view
         self._setup_hosts_tab()
         
-        # Tab 2: Brute Force tab (like legacy)
-        self._setup_brute_tab()
+        # Tab 2: Hydra tab (renamed from Brute, with 3 sub-tabs)
+        self._setup_hydra_tab()
+        
+        # Tab 3: Results tab (successful credentials)
+        self._setup_results_tab()
         
         logger.debug("Main content setup complete")
     
@@ -236,34 +243,70 @@ class MainWindow(QMainWindow):
         
         logger.debug("Hosts tab setup complete")
     
-    def _setup_brute_tab(self) -> None:
-        """Setup Brute Force tab with sub-tabs for each attack."""
-        self.brute_tab_widget = QtWidgets.QTabWidget()
-        self.brute_tab_widget.setTabsClosable(True)
-        self.brute_tab_widget.tabCloseRequested.connect(self._on_brute_tab_close_requested)
+    def _setup_hydra_tab(self) -> None:
+        """Setup Hydra tab with 3 sub-tabs: Services, Running, History."""
+        # Create Hydra tab with sub-tabs
+        self.hydra_tab_widget = QtWidgets.QTabWidget()
         
-        # Add placeholder text when no attacks running
+        # Sub-tab 1: Services (Nmap import)
+        self.hydra_services_widget = HydraServicesWidget()
+        self.hydra_services_widget.attack_requested.connect(self._on_services_attack_requested)
+        # Connect Import and Refresh buttons
+        self.hydra_services_widget.import_btn.clicked.disconnect()  # Disconnect placeholder
+        self.hydra_services_widget.import_btn.clicked.connect(self._on_import_from_nmap)
+        self.hydra_services_widget.refresh_btn.clicked.disconnect()  # Disconnect placeholder
+        self.hydra_services_widget.refresh_btn.clicked.connect(self._on_refresh_hydra_services)
+        self.hydra_tab_widget.addTab(self.hydra_services_widget, "Services")
+        
+        # Sub-tab 2: Running (Active attacks)
+        self.hydra_running_widget = QtWidgets.QTabWidget()
+        self.hydra_running_widget.setTabsClosable(True)
+        self.hydra_running_widget.tabCloseRequested.connect(self._on_running_tab_close_requested)
+        
+        # Add placeholder
         placeholder = QtWidgets.QLabel(
-            "No brute force attacks running.\n\n"
-            "Right-click on a service port in the Hosts tab to start a Hydra attack."
+            "No attacks running.\n\n"
+            "Select services from the Services tab or right-click on a port in the Hosts tab."
         )
         placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         placeholder.setStyleSheet("color: gray; font-size: 14px;")
-        self.brute_tab_widget.addTab(placeholder, "Getting Started")
+        self.hydra_running_widget.addTab(placeholder, "Getting Started")
         
-        # Add Brute tab to main tabs
-        self.main_tabs.addTab(self.brute_tab_widget, "Brute")
+        self.hydra_tab_widget.addTab(self.hydra_running_widget, "Running")
         
-        logger.debug("Brute tab setup complete")
+        # Sub-tab 3: History (Completed attacks)
+        self.hydra_history_widget = HydraHistoryWidget()
+        self.hydra_history_widget.rerun_requested.connect(self._on_history_rerun_requested)
+        self.hydra_tab_widget.addTab(self.hydra_history_widget, "History")
+        
+        # Add Hydra tab to main tabs
+        self.main_tabs.addTab(self.hydra_tab_widget, "Hydra")
+        
+        logger.debug("Hydra tab setup complete")
     
-    def _on_brute_tab_close_requested(self, index: int) -> None:
+    def _setup_results_tab(self) -> None:
+        """Setup Results tab for successful credentials."""
+        self.results_widget = ResultsWidget()
+        self.main_tabs.addTab(self.results_widget, "Results")
+        
+        logger.debug("Results tab setup complete")
+    
+    def _setup_brute_tab(self) -> None:
         """
-        Handle brute tab close request.
+        DEPRECATED: Old brute tab setup.
+        Kept for backward compatibility, but replaced by _setup_hydra_tab().
+        """
+        logger.warning("_setup_brute_tab() is deprecated, use _setup_hydra_tab()")
+        self._setup_hydra_tab()
+    
+    def _on_running_tab_close_requested(self, index: int) -> None:
+        """
+        Handle running attack tab close request.
         
         Args:
             index: Tab index to close
         """
-        widget = self.brute_tab_widget.widget(index)
+        widget = self.hydra_running_widget.widget(index)
         
         # If it's a BruteWidget and attack is running, confirm
         if isinstance(widget, BruteWidget) and widget.is_running:
@@ -281,19 +324,27 @@ class MainWindow(QMainWindow):
             self._stop_hydra_attack(widget)
         
         # Remove tab
-        self.brute_tab_widget.removeTab(index)
+        self.hydra_running_widget.removeTab(index)
         
         # If no more attack tabs, add placeholder back
-        if self.brute_tab_widget.count() == 0:
+        if self.hydra_running_widget.count() == 0:
             placeholder = QtWidgets.QLabel(
-                "No brute force attacks running.\n\n"
-                "Right-click on a service port in the Hosts tab to start a Hydra attack."
+                "No attacks running.\n\n"
+                "Select services from the Services tab or right-click on a port in the Hosts tab."
             )
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             placeholder.setStyleSheet("color: gray; font-size: 14px;")
-            self.brute_tab_widget.addTab(placeholder, "Getting Started")
+            self.hydra_running_widget.addTab(placeholder, "Getting Started")
         
-        logger.info(f"Closed brute tab {index}")
+        logger.info(f"Closed running attack tab {index}")
+    
+    def _on_brute_tab_close_requested(self, index: int) -> None:
+        """
+        DEPRECATED: Old brute tab close handler.
+        Redirects to new running tab handler.
+        """
+        logger.warning("_on_brute_tab_close_requested() is deprecated, use _on_running_tab_close_requested()")
+        self._on_running_tab_close_requested(index)
     
     def _start_hydra_attack(
         self,
@@ -313,45 +364,72 @@ class MainWindow(QMainWindow):
         """
         async def run_attack_with_streaming():
             try:
+                # Get attack options from widget properties
+                single_user = brute_widget.property("single_user")
+                single_pass = brute_widget.property("single_pass")
+                blank_pass = brute_widget.property("blank_pass")
+                login_as_pass = brute_widget.property("login_as_pass")
+                loop_users = brute_widget.property("loop_users")
+                exit_first = brute_widget.property("exit_first")
+                verbose = brute_widget.property("verbose")
+                custom_args = brute_widget.property("additional_args")
+                
                 # Import strategy module
                 from legion.utils.wordlist_strategy import WordlistStrategy, AttackMode
                 import tempfile
                 
-                # Analyze wordlists
-                brute_widget.append_output("🔍 Analyzing wordlists...")
-                analysis = WordlistStrategy.analyze_directory(Path(wordlist_path))
-                
-                brute_widget.append_output(
-                    f"📊 Mode: {analysis.mode.value.upper()}\n"
-                    f"   Combo files: {len(analysis.combo_files)}\n"
-                    f"   Estimated combinations: {analysis.estimated_combinations:,}"
-                )
-                
-                # Prepare files
-                temp_dir = Path(tempfile.gettempdir()) / "legion_wordlists"
-                
-                if analysis.mode == AttackMode.COMBO:
-                    combo_file = WordlistStrategy.prepare_combo_file(
-                        analysis.combo_files, temp_dir, max_entries=10000
-                    )
-                    brute_widget.append_output(f"✅ Prepared combo file: {combo_file.name}")
+                # Determine attack mode
+                if single_user or single_pass:
+                    # Single credential mode
+                    brute_widget.append_output("🔑 Single credential mode")
+                    if single_user:
+                        brute_widget.append_output(f"   Username: {single_user}")
+                    if single_pass:
+                        brute_widget.append_output(f"   Password: {'*' * len(single_pass)}")
+                    
                     username_file = None
                     password_file = None
-                else:
-                    merged_user, merged_pass = WordlistStrategy.prepare_separate_files(
-                        analysis.username_files,
-                        analysis.password_files,
-                        temp_dir,
-                        max_entries=1000
-                    )
-                    brute_widget.append_output(
-                        f"✅ Prepared wordlists:\n"
-                        f"   Users: {merged_user.name}\n"
-                        f"   Passwords: {merged_pass.name}"
-                    )
-                    username_file = str(merged_user)
-                    password_file = str(merged_pass)
                     combo_file = None
+                    use_single_creds = True
+                else:
+                    # Wordlist mode
+                    use_single_creds = False
+                    
+                    # Analyze wordlists
+                    brute_widget.append_output("🔍 Analyzing wordlists...")
+                    analysis = WordlistStrategy.analyze_directory(Path(wordlist_path))
+                    
+                    brute_widget.append_output(
+                        f"📊 Mode: {analysis.mode.value.upper()}\n"
+                        f"   Combo files: {len(analysis.combo_files)}\n"
+                        f"   Estimated combinations: {analysis.estimated_combinations:,}"
+                    )
+                    
+                    # Prepare files
+                    temp_dir = Path(tempfile.gettempdir()) / "legion_wordlists"
+                    
+                    if analysis.mode == AttackMode.COMBO:
+                        combo_file = WordlistStrategy.prepare_combo_file(
+                            analysis.combo_files, temp_dir, max_entries=10000
+                        )
+                        brute_widget.append_output(f"✅ Prepared combo file: {combo_file.name}")
+                        username_file = None
+                        password_file = None
+                    else:
+                        merged_user, merged_pass = WordlistStrategy.prepare_separate_files(
+                            analysis.username_files,
+                            analysis.password_files,
+                            temp_dir,
+                            max_entries=1000
+                        )
+                        brute_widget.append_output(
+                            f"✅ Prepared wordlists:\n"
+                            f"   Users: {merged_user.name}\n"
+                            f"   Passwords: {merged_pass.name}"
+                        )
+                        username_file = str(merged_user)
+                        password_file = str(merged_pass)
+                        combo_file = None
                 
                 # Initialize Hydra
                 hydra = HydraTool()
@@ -362,15 +440,48 @@ class MainWindow(QMainWindow):
                 
                 brute_widget.append_output(f"🔧 Hydra version: {await hydra.get_version()}")
                 
-                # Build additional args for HTTP services
+                # Build additional args
                 additional_args = []
+                
+                # HTTP services need path
                 if brute_widget.service in ['http-get', 'http-post', 'https-get', 'https-post']:
-                    additional_args = ["-m", "/"]
+                    additional_args.extend(["-m", "/"])
+                
+                # Credential helper flags (-e)
+                cred_helper_flags = []
+                if blank_pass:
+                    cred_helper_flags.append("n")  # -e n: try empty password
+                if login_as_pass:
+                    cred_helper_flags.append("s")  # -e s: try login as password
+                
+                if cred_helper_flags:
+                    additional_args.extend(["-e", "".join(cred_helper_flags)])
+                    brute_widget.append_output(f"🔐 Credential helpers: -e {''.join(cred_helper_flags)}")
+                
+                # Attack modifier flags
+                if loop_users:
+                    additional_args.append("-u")  # Loop users first
+                    brute_widget.append_output("🔄 Loop mode: Users first (-u)")
+                if exit_first:
+                    additional_args.append("-f")  # Exit on first valid
+                    brute_widget.append_output("🎯 Exit on first valid (-f)")
+                if verbose:
+                    additional_args.append("-V")  # Verbose mode
+                    brute_widget.append_output("📢 Verbose mode (-V)")
+                
+                # Custom arguments
+                if custom_args:
+                    # Parse custom args into list
+                    import shlex
+                    additional_args.extend(shlex.split(custom_args))
+                    brute_widget.append_output(f"⚙️ Custom args: {custom_args}")
                 
                 # Start attack
+                attack_mode = "Single Credential" if use_single_creds else ("Combo" if combo_file else "Wordlist")
                 brute_widget.append_output(
                     f"\n🚀 Starting attack on {brute_widget.service}://"
                     f"{brute_widget.host_ip}:{brute_widget.port}\n"
+                    f"   Mode: {attack_mode}\n"
                     f"   Tasks: {tasks}\n"
                     f"   Timeout: {timeout}s\n"
                 )
@@ -385,7 +496,20 @@ class MainWindow(QMainWindow):
                 start_time = time.time()
                 
                 try:
-                    if combo_file:
+                    if use_single_creds:
+                        # Single credential mode
+                        result = await hydra.attack(
+                            target=brute_widget.host_ip,
+                            service=brute_widget.service,
+                            login=single_user if single_user else None,
+                            password=single_pass if single_pass else None,
+                            port=brute_widget.port,
+                            tasks=tasks,
+                            timeout=float(timeout),
+                            additional_args=additional_args if additional_args else None
+                        )
+                    elif combo_file:
+                        # Combo file mode
                         result = await hydra.attack(
                             target=brute_widget.host_ip,
                             service=brute_widget.service,
@@ -396,6 +520,7 @@ class MainWindow(QMainWindow):
                             additional_args=additional_args if additional_args else None
                         )
                     else:
+                        # Wordlist mode
                         result = await hydra.attack(
                             target=brute_widget.host_ip,
                             service=brute_widget.service,
@@ -432,32 +557,85 @@ class MainWindow(QMainWindow):
                 brute_widget.append_output(f"   Credentials found: {len(hydra_result.credentials)}")
                 
                 if hydra_result.credentials:
-                    brute_widget.append_output("\n🔑 CREDENTIALS FOUND:")
-                    for cred in hydra_result.credentials:
-                        brute_widget.append_output(
-                            f"   ✓ {cred.login}:{cred.password} on {cred.service}://{cred.host}:{cred.port}"
-                        )
+                    # Use batch mode for many credentials (more efficient)
+                    if len(hydra_result.credentials) > 10:
+                        brute_widget.append_output(f"\n🔑 CREDENTIALS FOUND ({len(hydra_result.credentials)} total):")
+                        brute_widget.append_output("   (Displaying first 10, see Results tab for all)")
                         
-                        # Emit signal
-                        brute_widget.credentials_found.emit(cred.login, cred.password)
+                        # Show only first 10 in output
+                        for cred in hydra_result.credentials[:10]:
+                            brute_widget.append_output(
+                                f"   ✓ {cred.login}:{cred.password} on {cred.service}://{cred.host}:{cred.port}"
+                            )
                         
-                        # Save to database
-                        credential = Credential(
-                            host=cred.host,
-                            port=cred.port,
-                            service=cred.service,
-                            username=cred.login,
-                            password=cred.password,
-                            source="hydra",
-                            verified=True
-                        )
-                        self.database.save_credential(credential)
-                        logger.info(f"Saved credential: {cred.login}:{cred.password}")
+                        # Add all to Results tab in batch (efficient)
+                        cred_results = [
+                            CredentialResult(
+                                host=cred.host,
+                                port=cred.port,
+                                service=cred.service,
+                                username=cred.login,
+                                password=cred.password,
+                                found_at=datetime.now()
+                            )
+                            for cred in hydra_result.credentials
+                        ]
+                        self.results_widget.add_credentials_bulk(cred_results)
+                        logger.info(f"Found {len(hydra_result.credentials)} credentials (stored in Results tab)")
+                        
+                    else:
+                        # Few credentials - show all and add individually
+                        brute_widget.append_output("\n🔑 CREDENTIALS FOUND:")
+                        for cred in hydra_result.credentials:
+                            brute_widget.append_output(
+                                f"   ✓ {cred.login}:{cred.password} on {cred.service}://{cred.host}:{cred.port}"
+                            )
+                            
+                            # Emit signal
+                            brute_widget.credentials_found.emit(cred.login, cred.password)
+                            
+                            # Add to Results tab (RAM only - no database save)
+                            cred_result = CredentialResult(
+                                host=cred.host,
+                                port=cred.port,
+                                service=cred.service,
+                                username=cred.login,
+                                password=cred.password,
+                                found_at=datetime.now()
+                            )
+                            self.results_widget.add_credential(cred_result)
+                            logger.info(f"Found credential: {cred.login}:{cred.password} (stored in Results tab)")
                     
                     # Blink tab
                     tab_index = brute_widget.property("tab_index")
                     if tab_index is not None:
                         self._blink_brute_tab(tab_index)
+                
+                # Add to History tab
+                has_credentials = len(hydra_result.credentials) > 0
+                attack_record = AttackRecord(
+                    host=brute_widget.host_ip,
+                    port=brute_widget.port,
+                    service=brute_widget.service,
+                    started=datetime.fromtimestamp(start_time),
+                    duration=elapsed,
+                    success=has_credentials,
+                    credentials_found=len(hydra_result.credentials),
+                    attempts=hydra_result.statistics.total_attempts,
+                    command="",  # Could add full command here
+                    output=result.stdout
+                )
+                self.hydra_history_widget.add_attack(attack_record)
+                
+                # Blink tab based on success
+                tab_index = brute_widget.property("tab_index")
+                if tab_index is not None:
+                    if has_credentials:
+                        # Already blinked green above
+                        pass
+                    else:
+                        # Reset to default color (no credentials = not a failure, just no results)
+                        self._reset_tab_color(tab_index)
                 
                 brute_widget.set_stats(f"Completed - {len(hydra_result.credentials)} credentials found")
                 brute_widget.mark_finished(True)
@@ -466,6 +644,11 @@ class MainWindow(QMainWindow):
                 logger.error(f"Hydra attack error: {e}", exc_info=True)
                 brute_widget.append_output(f"\n❌ ERROR: {str(e)}")
                 brute_widget.mark_finished(False)
+                
+                # Blink tab red on error
+                tab_index = brute_widget.property("tab_index")
+                if tab_index is not None:
+                    self._blink_brute_tab(tab_index, success=False)
         
         # Run async
         asyncio.create_task(run_attack_with_streaming())
@@ -497,20 +680,413 @@ class MainWindow(QMainWindow):
         logger.info(f"Credentials found: {username}:{password}")
         self.status_label.setText(f"🔑 Credentials found: {username}:***")
     
-    def _blink_brute_tab(self, tab_index: int) -> None:
+    def _blink_brute_tab(self, tab_index: int, success: bool = True) -> None:
         """
-        Blink brute tab to indicate credentials found (like legacy).
+        Blink brute tab to indicate attack result.
         
         Args:
             tab_index: Tab index to blink
+            success: True for green (credentials found), False for red (failed)
         """
-        # Change tab text color to red
-        self.brute_tab_widget.tabBar().setTabTextColor(tab_index, QtGui.QColor('red'))
+        # Choose color based on success
+        color = QtGui.QColor('green') if success else QtGui.QColor('red')
         
-        # Also blink main Brute tab
-        self.main_tabs.tabBar().setTabTextColor(1, QtGui.QColor('red'))
+        # Change tab text color in Running sub-tab
+        self.hydra_running_widget.tabBar().setTabTextColor(tab_index, color)
         
-        logger.info(f"Blinking tab {tab_index} - credentials found")
+        # Also blink main Hydra tab and Running sub-tab
+        hydra_tab_index = self.main_tabs.indexOf(self.hydra_tab_widget)
+        self.main_tabs.tabBar().setTabTextColor(hydra_tab_index, color)
+        
+        running_tab_index = self.hydra_tab_widget.indexOf(self.hydra_running_widget)
+        self.hydra_tab_widget.tabBar().setTabTextColor(running_tab_index, color)
+        
+        # Only blink Results tab on success
+        if success:
+            results_tab_index = self.main_tabs.indexOf(self.results_widget)
+            self.main_tabs.tabBar().setTabTextColor(results_tab_index, color)
+        
+        status = "credentials found" if success else "attack failed"
+        logger.info(f"Blinking tab {tab_index} - {status}")
+    
+    def _reset_tab_color(self, tab_index: int) -> None:
+        """
+        Reset tab color to default (no special status).
+        
+        Args:
+            tab_index: Tab index to reset
+        """
+        # Reset to default color (usually black or system default)
+        default_color = self.palette().text().color()
+        
+        # Reset Running sub-tab
+        self.hydra_running_widget.tabBar().setTabTextColor(tab_index, default_color)
+        
+        logger.info(f"Reset tab {tab_index} color to default")
+    
+    def _edit_hydra_config(self, brute_widget: 'BruteWidget') -> None:
+        """
+        Re-open Hydra configuration dialog to edit a finished attack.
+        
+        Args:
+            brute_widget: The BruteWidget to edit
+        """
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QGroupBox, QHBoxLayout, QCheckBox, QLineEdit, QPushButton, QSpinBox, QFormLayout, QDialogButtonBox, QMessageBox
+        
+        # Get saved configuration
+        host_ip = brute_widget.host_ip
+        port = brute_widget.port
+        service = brute_widget.service
+        
+        # Create dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Edit Hydra Attack - {service}://{host_ip}:{port}")
+        dialog.setMinimumWidth(600)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Target info (read-only)
+        info_group = QGroupBox("Target Information")
+        info_layout = QVBoxLayout()
+        info_label = QtWidgets.QLabel(
+            f"<b>Service:</b> {service}<br>"
+            f"<b>Host:</b> {host_ip}<br>"
+            f"<b>Port:</b> {port}"
+        )
+        info_layout.addWidget(info_label)
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+        
+        # Wordlist directory
+        wordlist_group = QGroupBox("Wordlist Directory")
+        wordlist_layout = QVBoxLayout()
+        
+        dir_layout = QHBoxLayout()
+        wordlist_edit = QLineEdit()
+        wordlist_edit.setPlaceholderText("Path to wordlist directory...")
+        wordlist_edit.setText(brute_widget.property("wordlist_path") or "")
+        
+        wordlist_browse = QPushButton("Browse...")
+        wordlist_browse.clicked.connect(
+            lambda: self._browse_wordlist_dir(wordlist_edit)
+        )
+        
+        dir_layout.addWidget(wordlist_edit)
+        dir_layout.addWidget(wordlist_browse)
+        wordlist_layout.addLayout(dir_layout)
+        
+        wordlist_group.setLayout(wordlist_layout)
+        layout.addWidget(wordlist_group)
+        
+        # Credential Options
+        cred_options_group = QGroupBox("Credential Options")
+        cred_options_layout = QVBoxLayout()
+        
+        single_cred_layout = QHBoxLayout()
+        
+        # Single username
+        single_user_check = QCheckBox("Single Username:")
+        single_user_edit = QLineEdit()
+        single_user_edit.setPlaceholderText("e.g., admin")
+        single_user_value = brute_widget.property("single_user") or ""
+        if single_user_value:
+            single_user_check.setChecked(True)
+            single_user_edit.setText(single_user_value)
+            single_user_edit.setEnabled(True)
+        else:
+            single_user_edit.setEnabled(False)
+        single_user_check.toggled.connect(single_user_edit.setEnabled)
+        
+        single_cred_layout.addWidget(single_user_check)
+        single_cred_layout.addWidget(single_user_edit)
+        
+        # Single password
+        single_pass_check = QCheckBox("Single Password:")
+        single_pass_edit = QLineEdit()
+        single_pass_edit.setPlaceholderText("e.g., password123")
+        single_pass_value = brute_widget.property("single_pass") or ""
+        if single_pass_value:
+            single_pass_check.setChecked(True)
+            single_pass_edit.setText(single_pass_value)
+            single_pass_edit.setEnabled(True)
+        else:
+            single_pass_edit.setEnabled(False)
+        single_pass_check.toggled.connect(single_pass_edit.setEnabled)
+        
+        single_cred_layout.addWidget(single_pass_check)
+        single_cred_layout.addWidget(single_pass_edit)
+        
+        cred_options_layout.addLayout(single_cred_layout)
+        
+        # Credential helpers
+        helper_layout = QHBoxLayout()
+        
+        check_blank_pass = QCheckBox("Try blank passwords (-e n)")
+        check_blank_pass.setChecked(brute_widget.property("blank_pass") or False)
+        helper_layout.addWidget(check_blank_pass)
+        
+        check_login_as_pass = QCheckBox("Try login as password (-e s)")
+        check_login_as_pass.setChecked(brute_widget.property("login_as_pass") or False)
+        helper_layout.addWidget(check_login_as_pass)
+        
+        cred_options_layout.addLayout(helper_layout)
+        
+        cred_options_group.setLayout(cred_options_layout)
+        layout.addWidget(cred_options_group)
+        
+        # Attack Modifiers
+        modifiers_group = QGroupBox("Attack Modifiers")
+        modifiers_layout = QHBoxLayout()
+        
+        check_loop_users = QCheckBox("Loop users first (-u)")
+        check_loop_users.setChecked(brute_widget.property("loop_users") or False)
+        modifiers_layout.addWidget(check_loop_users)
+        
+        check_exit_first = QCheckBox("Exit on first valid (-f)")
+        check_exit_first.setChecked(brute_widget.property("exit_first") or False)
+        modifiers_layout.addWidget(check_exit_first)
+        
+        check_verbose = QCheckBox("Verbose output (-V)")
+        check_verbose.setChecked(brute_widget.property("verbose") or False)
+        modifiers_layout.addWidget(check_verbose)
+        
+        modifiers_group.setLayout(modifiers_layout)
+        layout.addWidget(modifiers_group)
+        
+        # Advanced Options
+        advanced_group = QGroupBox("Advanced Options")
+        advanced_layout = QVBoxLayout()
+        
+        additional_label = QtWidgets.QLabel("Additional Hydra arguments:")
+        advanced_layout.addWidget(additional_label)
+        
+        additional_args_edit = QLineEdit()
+        additional_args_edit.setPlaceholderText("e.g., -I -w 30")
+        additional_args_edit.setText(brute_widget.property("additional_args") or "")
+        advanced_layout.addWidget(additional_args_edit)
+        
+        advanced_group.setLayout(advanced_layout)
+        layout.addWidget(advanced_group)
+        
+        # Performance Options
+        options_group = QGroupBox("Performance Options")
+        options_layout = QFormLayout()
+        
+        tasks_spin = QSpinBox()
+        tasks_spin.setMinimum(1)
+        tasks_spin.setMaximum(64)
+        tasks_spin.setValue(brute_widget.property("tasks") or 16)
+        options_layout.addRow("Parallel tasks (-t):", tasks_spin)
+        
+        timeout_spin = QSpinBox()
+        timeout_spin.setMinimum(1)
+        timeout_spin.setMaximum(600)
+        timeout_spin.setValue(brute_widget.property("timeout") or 30)
+        options_layout.addRow("Timeout (seconds) (-w):", timeout_spin)
+        
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
+        
+        # Auto-start option
+        autostart_group = QGroupBox("Execution")
+        autostart_layout = QVBoxLayout()
+        
+        autostart_check = QCheckBox("Start attack immediately after updating")
+        autostart_check.setChecked(brute_widget.property("auto_start") or True)
+        autostart_layout.addWidget(autostart_check)
+        
+        autostart_group.setLayout(autostart_layout)
+        layout.addWidget(autostart_group)
+        
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        # Show dialog
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        
+        # Update configuration
+        wordlist_path = wordlist_edit.text().strip()
+        single_user = single_user_edit.text().strip() if single_user_check.isChecked() else ""
+        single_pass = single_pass_edit.text().strip() if single_pass_check.isChecked() else ""
+        blank_pass = check_blank_pass.isChecked()
+        login_as_pass = check_login_as_pass.isChecked()
+        loop_users = check_loop_users.isChecked()
+        exit_first = check_exit_first.isChecked()
+        verbose = check_verbose.isChecked()
+        additional_args = additional_args_edit.text().strip()
+        tasks_value = tasks_spin.value()
+        timeout_value = timeout_spin.value()
+        auto_start = autostart_check.isChecked()
+        
+        # Validation
+        if not wordlist_path and not (single_user or single_pass):
+            QMessageBox.warning(
+                self,
+                "Missing Credentials",
+                "Please select a wordlist directory OR enter single username/password."
+            )
+            return
+        
+        # Update widget properties
+        brute_widget.setProperty("single_user", single_user)
+        brute_widget.setProperty("single_pass", single_pass)
+        brute_widget.setProperty("blank_pass", blank_pass)
+        brute_widget.setProperty("login_as_pass", login_as_pass)
+        brute_widget.setProperty("loop_users", loop_users)
+        brute_widget.setProperty("exit_first", exit_first)
+        brute_widget.setProperty("verbose", verbose)
+        brute_widget.setProperty("additional_args", additional_args)
+        brute_widget.setProperty("auto_start", auto_start)
+        brute_widget.setProperty("tasks", tasks_value)
+        brute_widget.setProperty("timeout", timeout_value)
+        brute_widget.setProperty("wordlist_path", wordlist_path)
+        brute_widget.wordlist_path = wordlist_path or "single-creds"
+        
+        # Reset widget state
+        brute_widget.is_finished = False
+        brute_widget.output_display.clear()
+        brute_widget.set_stats("Ready to re-run with updated configuration")
+        brute_widget.run_button.setText("Run")
+        brute_widget.run_button.setStyleSheet("")
+        brute_widget.stats_label.setStyleSheet("padding: 5px; background-color: #f0f0f0;")
+        
+        # Reset tab color
+        tab_index = brute_widget.property("tab_index")
+        if tab_index is not None:
+            self._reset_tab_color(tab_index)
+        
+        self.status_label.setText(f"✏️ Configuration updated for {service}://{host_ip}:{port}")
+        logger.info(f"Updated Hydra attack configuration: {service}://{host_ip}:{port}")
+        
+        # Auto-start if enabled
+        if auto_start:
+            self.status_label.setText(f"🚀 Re-starting attack: {service}://{host_ip}:{port}...")
+            brute_widget.attack_started.emit()
+    
+    def _on_services_attack_requested(self, services: list) -> None:
+        """
+        Handle attack request from Services tab.
+        
+        Args:
+            services: List of (host, port, service) tuples
+        """
+        logger.info(f"Attack requested for {len(services)} services")
+        
+        for host, port, service in services:
+            # Launch attack for each service
+            self._launch_hydra_attack_from_nmap(host, port, service)
+    
+    def _on_history_rerun_requested(self, host: str, port: int, service: str) -> None:
+        """
+        Handle re-run request from History tab.
+        
+        Args:
+            host: Target host
+            port: Target port
+            service: Service name
+        """
+        logger.info(f"Re-running attack: {host}:{port} ({service})")
+        self._launch_hydra_attack_from_nmap(host, port, service)
+    
+    def _on_import_from_nmap(self) -> None:
+        """Import all open ports with supported services from current Nmap scan to Hydra Services tab."""
+        logger.info("Importing services from Nmap")
+        
+        # Get all ports from all hosts
+        imported_count = 0
+        
+        for row in range(self.hosts_model.rowCount()):
+            host_ip = self.hosts_model.data(
+                self.hosts_model.index(row, self.hosts_model.COL_IP),
+                Qt.ItemDataRole.DisplayRole
+            )
+            
+            # Get host's ports from database
+            ports = self.database.get_ports(host_ip)
+            if not ports:
+                continue
+            
+            # Map services - erweiterte Liste
+            hydra_services = {
+                'ssh': 'ssh',
+                'ftp': 'ftp', 
+                'ftps': 'ftp',
+                'telnet': 'telnet',
+                'mysql': 'mysql',
+                'postgres': 'postgres',
+                'postgresql': 'postgres',
+                'mssql': 'mssql',
+                'ms-sql': 'mssql',
+                'vnc': 'vnc',
+                'http': 'http-get',
+                'https': 'https-get',
+                'http-proxy': 'http-get',
+                'http-alt': 'http-get',
+                'www': 'http-get',
+                'smb': 'smb',
+                'microsoft-ds': 'smb',
+                'netbios': 'smb',
+                'rdp': 'rdp',
+                'ms-wbt-server': 'rdp',
+                'pop3': 'pop3',
+                'pop3s': 'pop3',
+                'imap': 'imap',
+                'imaps': 'imap',
+                'smtp': 'smtp',
+                'smtps': 'smtp',
+                'ldap': 'ldap',
+                'ldaps': 'ldap',
+                'oracle': 'oracle-listener',
+                'oracle-tns': 'oracle-listener'
+            }
+            
+            for port in ports:
+                # Only open ports
+                if port.state != "open":
+                    continue
+                
+                # Check if service is supported
+                service_lower = port.service_name.lower() if port.service_name else ""
+                hydra_service = None
+                
+                for svc_name, hydra_svc in hydra_services.items():
+                    if svc_name in service_lower:
+                        hydra_service = hydra_svc
+                        break
+                
+                if hydra_service:
+                    self.hydra_services_widget.add_service(
+                        host_ip,
+                        port.number,
+                        hydra_service,
+                        port.state
+                    )
+                    imported_count += 1
+        
+        logger.info(f"Imported {imported_count} services from Nmap")
+        self.status_label.setText(f"📥 Imported {imported_count} services to Hydra tab")
+        
+        if imported_count == 0:
+            QMessageBox.information(
+                self,
+                "Import from Nmap",
+                "No supported services found.\n\n"
+                "Run a scan first and make sure hosts have open ports with supported services "
+                "(SSH, FTP, HTTP, MySQL, etc.)"
+            )
+    
+    def _on_refresh_hydra_services(self) -> None:
+        """Refresh Hydra Services tab by clearing and re-importing from Nmap."""
+        logger.info("Refreshing Hydra Services")
+        self.hydra_services_widget.clear_services()
+        self._on_import_from_nmap()
     
     def _setup_statusbar(self) -> None:
         """Setup status bar."""
@@ -1295,9 +1871,19 @@ class MainWindow(QMainWindow):
                     break
             
             if hydra_service:
-                hydra_action = bruteforce_menu.addAction(f"Hydra - {service}")
+                # Option 1: Launch attack immediately
+                hydra_action = bruteforce_menu.addAction(f"Launch Hydra - {service}")
                 hydra_action.triggered.connect(
                     lambda: self._launch_hydra_attack(host_ip, port_number, hydra_service)
+                )
+                
+                bruteforce_menu.addSeparator()
+                
+                # Option 2: Send to Hydra Services tab
+                send_to_hydra_action = bruteforce_menu.addAction("📤 Send to Hydra Tab")
+                send_to_hydra_action.setToolTip("Add this service to Hydra Services tab for later attack")
+                send_to_hydra_action.triggered.connect(
+                    lambda: self._send_to_hydra_tab(host_ip, port_number, hydra_service, port_state)
                 )
             else:
                 no_support = bruteforce_menu.addAction("No supported service detected")
@@ -1305,6 +1891,29 @@ class MainWindow(QMainWindow):
         
         # Show menu at cursor position
         menu.exec(self.ports_table.viewport().mapToGlobal(position))
+    
+    def _send_to_hydra_tab(self, host_ip: str, port: int, service: str, state: str) -> None:
+        """
+        Send a service to Hydra Services tab.
+        
+        Args:
+            host_ip: Target host IP
+            port: Port number
+            service: Service name
+            state: Port state (open, closed, filtered)
+        """
+        # Add service to Hydra Services widget
+        self.hydra_services_widget.add_service(host_ip, port, service, state)
+        
+        # Switch to Hydra tab -> Services sub-tab
+        hydra_tab_index = self.main_tabs.indexOf(self.hydra_tab_widget)
+        self.main_tabs.setCurrentIndex(hydra_tab_index)
+        
+        services_tab_index = self.hydra_tab_widget.indexOf(self.hydra_services_widget)
+        self.hydra_tab_widget.setCurrentIndex(services_tab_index)
+        
+        logger.info(f"Sent to Hydra Services tab: {host_ip}:{port} ({service})")
+        self.status_label.setText(f"📤 Added {host_ip}:{port} to Hydra Services tab")
     
     def _rescan_host_with_ports(self, host_ip: str, ports: str) -> None:
         """
@@ -1537,7 +2146,6 @@ class MainWindow(QMainWindow):
         """Export all scan data to file."""
         from PyQt6.QtWidgets import QFileDialog
         import json
-        from datetime import datetime
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename, _ = QFileDialog.getSaveFileName(
@@ -1635,7 +2243,6 @@ class MainWindow(QMainWindow):
             filename: Path to JSON file
         """
         import json
-        from datetime import datetime
         from legion.core.models import Host, Port
         
         with open(filename, 'r') as f:
@@ -1983,8 +2590,88 @@ class MainWindow(QMainWindow):
         wordlist_group.setLayout(wordlist_layout)
         layout.addWidget(wordlist_group)
         
-        # Options group
-        options_group = QtWidgets.QGroupBox("Attack Options")
+        # Credential Options group (like Legacy)
+        cred_options_group = QtWidgets.QGroupBox("Credential Options")
+        cred_options_layout = QtWidgets.QVBoxLayout()
+        
+        # Single credential testing
+        single_cred_layout = QtWidgets.QHBoxLayout()
+        
+        # Single username
+        single_user_check = QtWidgets.QCheckBox("Single Username:")
+        single_user_edit = QtWidgets.QLineEdit()
+        single_user_edit.setPlaceholderText("e.g., admin")
+        single_user_edit.setEnabled(False)
+        single_user_check.toggled.connect(single_user_edit.setEnabled)
+        
+        single_cred_layout.addWidget(single_user_check)
+        single_cred_layout.addWidget(single_user_edit)
+        
+        # Single password
+        single_pass_check = QtWidgets.QCheckBox("Single Password:")
+        single_pass_edit = QtWidgets.QLineEdit()
+        single_pass_edit.setPlaceholderText("e.g., password123")
+        single_pass_edit.setEnabled(False)
+        single_pass_check.toggled.connect(single_pass_edit.setEnabled)
+        
+        single_cred_layout.addWidget(single_pass_check)
+        single_cred_layout.addWidget(single_pass_edit)
+        
+        cred_options_layout.addLayout(single_cred_layout)
+        
+        # Credential helpers
+        helper_layout = QtWidgets.QHBoxLayout()
+        
+        check_blank_pass = QtWidgets.QCheckBox("Try blank passwords (-e n)")
+        check_blank_pass.setToolTip("Try empty password for each username")
+        helper_layout.addWidget(check_blank_pass)
+        
+        check_login_as_pass = QtWidgets.QCheckBox("Try login as password (-e s)")
+        check_login_as_pass.setToolTip("Try username as password (e.g., admin:admin)")
+        helper_layout.addWidget(check_login_as_pass)
+        
+        cred_options_layout.addLayout(helper_layout)
+        
+        cred_options_group.setLayout(cred_options_layout)
+        layout.addWidget(cred_options_group)
+        
+        # Attack Modifiers group
+        modifiers_group = QtWidgets.QGroupBox("Attack Modifiers")
+        modifiers_layout = QtWidgets.QHBoxLayout()
+        
+        check_loop_users = QtWidgets.QCheckBox("Loop users first (-u)")
+        check_loop_users.setToolTip("Try all users for one password before next password")
+        modifiers_layout.addWidget(check_loop_users)
+        
+        check_exit_first = QtWidgets.QCheckBox("Exit on first valid (-f)")
+        check_exit_first.setToolTip("Stop attack after finding first valid credential")
+        modifiers_layout.addWidget(check_exit_first)
+        
+        check_verbose = QtWidgets.QCheckBox("Verbose output (-V)")
+        check_verbose.setToolTip("Show each login attempt")
+        modifiers_layout.addWidget(check_verbose)
+        
+        modifiers_group.setLayout(modifiers_layout)
+        layout.addWidget(modifiers_group)
+        
+        # Advanced Options
+        advanced_group = QtWidgets.QGroupBox("Advanced Options")
+        advanced_layout = QtWidgets.QVBoxLayout()
+        
+        additional_label = QtWidgets.QLabel("Additional Hydra arguments:")
+        additional_label.setStyleSheet("font-size: 10px; color: #666;")
+        advanced_layout.addWidget(additional_label)
+        
+        additional_args_edit = QtWidgets.QLineEdit()
+        additional_args_edit.setPlaceholderText("e.g., -I -w 30 (optional custom flags)")
+        additional_args_edit.setToolTip("Custom Hydra command-line arguments")
+        advanced_layout.addWidget(additional_args_edit)
+        
+        advanced_group.setLayout(advanced_layout)
+        layout.addWidget(advanced_group)
+        
+        # Options group (Tasks & Timeout)
+        options_group = QtWidgets.QGroupBox("Performance Options")
         options_layout = QtWidgets.QFormLayout()
         
         # Parallel tasks
@@ -2005,6 +2692,18 @@ class MainWindow(QMainWindow):
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
         
+        # Auto-start option
+        autostart_group = QtWidgets.QGroupBox("Execution")
+        autostart_layout = QtWidgets.QVBoxLayout()
+        
+        autostart_check = QtWidgets.QCheckBox("Start attack immediately after creating tab")
+        autostart_check.setToolTip("If unchecked, you must click 'Run' button manually")
+        autostart_check.setChecked(True)  # Default: auto-start
+        autostart_layout.addWidget(autostart_check)
+        
+        autostart_group.setLayout(autostart_layout)
+        layout.addWidget(autostart_group)
+        
         # Buttons
         button_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok |
@@ -2023,15 +2722,51 @@ class MainWindow(QMainWindow):
         tasks_value = tasks_spin.value()
         timeout_value = timeout_spin.value()
         
-        if not wordlist_path:
-            QMessageBox.warning(self, "Missing Wordlists", "Please select a wordlist directory.")
+        # Credential options
+        single_user = single_user_edit.text().strip() if single_user_check.isChecked() else None
+        single_pass = single_pass_edit.text().strip() if single_pass_check.isChecked() else None
+        blank_pass = check_blank_pass.isChecked()
+        login_as_pass = check_login_as_pass.isChecked()
+        
+        # Attack modifiers
+        loop_users = check_loop_users.isChecked()
+        exit_first = check_exit_first.isChecked()
+        verbose = check_verbose.isChecked()
+        
+        # Additional args
+        additional_args = additional_args_edit.text().strip()
+        
+        # Auto-start option
+        auto_start = autostart_check.isChecked()
+        
+        # Validation: Need wordlist OR single credentials
+        if not wordlist_path and not (single_user or single_pass):
+            QMessageBox.warning(
+                self, 
+                "Missing Credentials", 
+                "Please select a wordlist directory OR enter single username/password."
+            )
             return
         
         # Create BruteWidget for this attack
         tab_name = f"{service} ({port}/tcp)"
-        brute_widget = BruteWidget(host_ip, port, service, wordlist_path, self)
+        brute_widget = BruteWidget(host_ip, port, service, wordlist_path or "single-creds", self)
         
-        # Connect signals with captured values (not widget references!)
+        # Store attack options in widget
+        brute_widget.setProperty("single_user", single_user)
+        brute_widget.setProperty("single_pass", single_pass)
+        brute_widget.setProperty("blank_pass", blank_pass)
+        brute_widget.setProperty("login_as_pass", login_as_pass)
+        brute_widget.setProperty("loop_users", loop_users)
+        brute_widget.setProperty("exit_first", exit_first)
+        brute_widget.setProperty("verbose", verbose)
+        brute_widget.setProperty("additional_args", additional_args)
+        brute_widget.setProperty("auto_start", auto_start)
+        brute_widget.setProperty("tasks", tasks_value)
+        brute_widget.setProperty("timeout", timeout_value)
+        brute_widget.setProperty("wordlist_path", wordlist_path)
+        
+        # Connect signals with captured values
         brute_widget.attack_started.connect(
             lambda: self._start_hydra_attack(
                 brute_widget, wordlist_path, tasks_value, timeout_value
@@ -2041,19 +2776,26 @@ class MainWindow(QMainWindow):
             lambda: self._stop_hydra_attack(brute_widget)
         )
         brute_widget.credentials_found.connect(self._on_credentials_found)
+        brute_widget.edit_config.connect(
+            lambda: self._edit_hydra_config(brute_widget)
+        )
         
         # Remove "Getting Started" placeholder if it exists
-        if self.brute_tab_widget.count() == 1:
-            first_tab_widget = self.brute_tab_widget.widget(0)
+        if self.hydra_running_widget.count() == 1:
+            first_tab_widget = self.hydra_running_widget.widget(0)
             if isinstance(first_tab_widget, QtWidgets.QLabel):
-                self.brute_tab_widget.removeTab(0)
+                self.hydra_running_widget.removeTab(0)
         
-        # Add tab and switch to it
-        tab_index = self.brute_tab_widget.addTab(brute_widget, tab_name)
-        self.brute_tab_widget.setCurrentIndex(tab_index)
+        # Add tab to Running sub-tab and switch to it
+        tab_index = self.hydra_running_widget.addTab(brute_widget, tab_name)
+        self.hydra_running_widget.setCurrentIndex(tab_index)
         
-        # Switch to Brute tab in main tabs
-        self.main_tabs.setCurrentIndex(1)  # Index 1 = Brute tab
+        # Switch to Hydra tab in main tabs, then to Running sub-tab
+        hydra_tab_index = self.main_tabs.indexOf(self.hydra_tab_widget)
+        self.main_tabs.setCurrentIndex(hydra_tab_index)
+        
+        running_tab_index = self.hydra_tab_widget.indexOf(self.hydra_running_widget)
+        self.hydra_tab_widget.setCurrentIndex(running_tab_index)
         
         # Store widget reference for management
         brute_widget.setProperty("tab_index", tab_index)
@@ -2061,7 +2803,25 @@ class MainWindow(QMainWindow):
         
         logger.info(f"Created Hydra attack tab: {tab_name} for {host_ip}:{port}")
         
-        self.status_label.setText(f"💡 Hydra attack ready: {tab_name}. Click 'Run' to start.")
+        # Auto-start if enabled
+        if auto_start:
+            self.status_label.setText(f"🚀 Starting attack: {tab_name}...")
+            brute_widget.attack_started.emit()  # Trigger start immediately
+        else:
+            self.status_label.setText(f"💡 Hydra attack ready: {tab_name}. Click 'Run' to start.")
+    
+    def _launch_hydra_attack_from_nmap(self, host_ip: str, port: int, service: str) -> None:
+        """
+        Launch Hydra attack directly (used from Services tab or "Send to Hydra").
+        This bypasses the dialog and uses the same dialog as _launch_hydra_attack.
+        
+        Args:
+            host_ip: Target host IP
+            port: Target port number
+            service: Service type (ssh, ftp, etc.)
+        """
+        # Just call the regular launch function which shows the dialog
+        self._launch_hydra_attack(host_ip, port, service)
     
     def _browse_wordlist_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
         """
@@ -2321,27 +3081,8 @@ class MainWindow(QMainWindow):
                     result.success
                 )
                 
-                # Save credentials to database if found
-                if hydra_result.credentials:
-                    for cred in hydra_result.credentials:
-                        # Create Credential object
-                        credential = Credential(
-                            host=cred.host,
-                            port=cred.port,
-                            service=cred.service,
-                            username=cred.login,
-                            password=cred.password,
-                            source="hydra",
-                            verified=True
-                        )
-                        
-                        # Save to database
-                        self.database.save_credential(credential)
-                        
-                        logger.info(
-                            f"Saved credential: {cred.login}:{cred.password} "
-                            f"for {cred.service}://{cred.host}:{cred.port}"
-                        )
+                # Credentials are already in Results tab (added during streaming)
+                # No database save to prevent blocking/corruption
                 
                 self.status_label.setText("✅ Hydra attack completed")
                 

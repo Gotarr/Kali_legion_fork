@@ -33,12 +33,14 @@ class BruteWidget(QtWidgets.QWidget):
         attack_stopped: Emitted when attack is stopped/cancelled
         attack_finished: Emitted when attack completes
         credentials_found: Emitted when credentials are discovered (username, password)
+        edit_config: Emitted when user wants to edit attack configuration
     """
     
     attack_started = pyqtSignal()
     attack_stopped = pyqtSignal()
     attack_finished = pyqtSignal()
     credentials_found = pyqtSignal(str, str)  # username, password
+    edit_config = pyqtSignal()  # Request config edit
     
     def __init__(
         self,
@@ -65,6 +67,7 @@ class BruteWidget(QtWidgets.QWidget):
         self.service = service
         self.wordlist_path = wordlist_path
         self.is_running = False
+        self.is_finished = False
         self.process_id = None
         
         self._setup_ui()
@@ -123,6 +126,9 @@ class BruteWidget(QtWidgets.QWidget):
         if self.is_running:
             # Stop attack
             self.attack_stopped.emit()
+        elif self.is_finished:
+            # Edit finished attack configuration
+            self.edit_config.emit()
         else:
             # Start attack
             self.attack_started.emit()
@@ -192,6 +198,11 @@ class BruteWidget(QtWidgets.QWidget):
             success: Whether attack completed successfully
         """
         self.set_running(False)
+        self.is_finished = True
+        
+        # Change button to Edit mode
+        self.run_button.setText("Edit")
+        self.run_button.setStyleSheet("background-color: #5bc0de; color: white;")  # Blue
         
         if success:
             self.stats_label.setText("Status: ✅ Completed")
