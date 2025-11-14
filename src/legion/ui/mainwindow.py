@@ -24,6 +24,7 @@ from legion.core.models import Credential
 from legion.ui.models import HostsTableModel, PortsTableModel
 from legion.ui.dialogs import NewScanDialog, ScanProgressDialog, AboutDialog, AddHostDialog
 from legion.ui.settings import SettingsDialog
+from legion.ui.brute_widget import BruteWidget
 from legion.tools.hydra import HydraTool
 from legion.utils.wordlists import get_service_wordlists, export_credentials_to_wordlist
 from legion.utils.wordlist_processor import WordlistProcessor
@@ -159,9 +160,27 @@ class MainWindow(QMainWindow):
     
     def _setup_main_content(self) -> None:
         """Setup main content area."""
+        # Main tab widget (like legacy: Hosts, Brute, Services, etc.)
+        self.main_tabs = QtWidgets.QTabWidget()
+        self.main_layout.addWidget(self.main_tabs)
+        
+        # Tab 1: Hosts view
+        self._setup_hosts_tab()
+        
+        # Tab 2: Brute Force tab (like legacy)
+        self._setup_brute_tab()
+        
+        logger.debug("Main content setup complete")
+    
+    def _setup_hosts_tab(self) -> None:
+        """Setup main Hosts tab with splitter view."""
+        hosts_tab = QtWidgets.QWidget()
+        hosts_layout = QtWidgets.QVBoxLayout(hosts_tab)
+        hosts_layout.setContentsMargins(0, 0, 0, 0)
+        
         # Main splitter (horizontal)
         self.main_splitter = QtWidgets.QSplitter(Qt.Orientation.Horizontal)
-        self.main_layout.addWidget(self.main_splitter)
+        hosts_layout.addWidget(self.main_splitter)
         
         # Left panel: Hosts view
         self.left_panel = QtWidgets.QWidget()
@@ -212,7 +231,286 @@ class MainWindow(QMainWindow):
         # Set splitter sizes (60/40 split)
         self.main_splitter.setSizes([600, 400])
         
-        logger.debug("Main content setup complete")
+        # Add Hosts tab to main tabs
+        self.main_tabs.addTab(hosts_tab, "Hosts")
+        
+        logger.debug("Hosts tab setup complete")
+    
+    def _setup_brute_tab(self) -> None:
+        """Setup Brute Force tab with sub-tabs for each attack."""
+        self.brute_tab_widget = QtWidgets.QTabWidget()
+        self.brute_tab_widget.setTabsClosable(True)
+        self.brute_tab_widget.tabCloseRequested.connect(self._on_brute_tab_close_requested)
+        
+        # Add placeholder text when no attacks running
+        placeholder = QtWidgets.QLabel(
+            "No brute force attacks running.\n\n"
+            "Right-click on a service port in the Hosts tab to start a Hydra attack."
+        )
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setStyleSheet("color: gray; font-size: 14px;")
+        self.brute_tab_widget.addTab(placeholder, "Getting Started")
+        
+        # Add Brute tab to main tabs
+        self.main_tabs.addTab(self.brute_tab_widget, "Brute")
+        
+        logger.debug("Brute tab setup complete")
+    
+    def _on_brute_tab_close_requested(self, index: int) -> None:
+        """
+        Handle brute tab close request.
+        
+        Args:
+            index: Tab index to close
+        """
+        widget = self.brute_tab_widget.widget(index)
+        
+        # If it's a BruteWidget and attack is running, confirm
+        if isinstance(widget, BruteWidget) and widget.is_running:
+            reply = QMessageBox.question(
+                self,
+                "Stop Attack",
+                "Attack is still running. Stop and close tab?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.No:
+                return
+            
+            # Stop the attack first
+            self._stop_hydra_attack(widget)
+        
+        # Remove tab
+        self.brute_tab_widget.removeTab(index)
+        
+        # If no more attack tabs, add placeholder back
+        if self.brute_tab_widget.count() == 0:
+            placeholder = QtWidgets.QLabel(
+                "No brute force attacks running.\n\n"
+                "Right-click on a service port in the Hosts tab to start a Hydra attack."
+            )
+            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            placeholder.setStyleSheet("color: gray; font-size: 14px;")
+            self.brute_tab_widget.addTab(placeholder, "Getting Started")
+        
+        logger.info(f"Closed brute tab {index}")
+    
+    def _start_hydra_attack(
+        self,
+        brute_widget: BruteWidget,
+        wordlist_path: str,
+        tasks: int,
+        timeout: int
+    ) -> None:
+        """
+        Start Hydra attack with live output streaming.
+        
+        Args:
+            brute_widget: BruteWidget to update
+            wordlist_path: Path to wordlist directory
+            tasks: Number of parallel tasks
+            timeout: Attack timeout
+        """
+        async def run_attack_with_streaming():
+            try:
+                # Import strategy module
+                from legion.utils.wordlist_strategy import WordlistStrategy, AttackMode
+                import tempfile
+                
+                # Analyze wordlists
+                brute_widget.append_output("🔍 Analyzing wordlists...")
+                analysis = WordlistStrategy.analyze_directory(Path(wordlist_path))
+                
+                brute_widget.append_output(
+                    f"📊 Mode: {analysis.mode.value.upper()}\n"
+                    f"   Combo files: {len(analysis.combo_files)}\n"
+                    f"   Estimated combinations: {analysis.estimated_combinations:,}"
+                )
+                
+                # Prepare files
+                temp_dir = Path(tempfile.gettempdir()) / "legion_wordlists"
+                
+                if analysis.mode == AttackMode.COMBO:
+                    combo_file = WordlistStrategy.prepare_combo_file(
+                        analysis.combo_files, temp_dir, max_entries=10000
+                    )
+                    brute_widget.append_output(f"✅ Prepared combo file: {combo_file.name}")
+                    username_file = None
+                    password_file = None
+                else:
+                    merged_user, merged_pass = WordlistStrategy.prepare_separate_files(
+                        analysis.username_files,
+                        analysis.password_files,
+                        temp_dir,
+                        max_entries=1000
+                    )
+                    brute_widget.append_output(
+                        f"✅ Prepared wordlists:\n"
+                        f"   Users: {merged_user.name}\n"
+                        f"   Passwords: {merged_pass.name}"
+                    )
+                    username_file = str(merged_user)
+                    password_file = str(merged_pass)
+                    combo_file = None
+                
+                # Initialize Hydra
+                hydra = HydraTool()
+                if not await hydra.validate():
+                    brute_widget.append_output("❌ ERROR: Hydra not found!")
+                    brute_widget.mark_finished(False)
+                    return
+                
+                brute_widget.append_output(f"🔧 Hydra version: {await hydra.get_version()}")
+                
+                # Build additional args for HTTP services
+                additional_args = []
+                if brute_widget.service in ['http-get', 'http-post', 'https-get', 'https-post']:
+                    additional_args = ["-m", "/"]
+                
+                # Start attack
+                brute_widget.append_output(
+                    f"\n🚀 Starting attack on {brute_widget.service}://"
+                    f"{brute_widget.host_ip}:{brute_widget.port}\n"
+                    f"   Tasks: {tasks}\n"
+                    f"   Timeout: {timeout}s\n"
+                )
+                brute_widget.set_running(True)
+                brute_widget.set_stats("Running...")
+                
+                # Store hydra instance for killing
+                brute_widget.setProperty("hydra_tool", hydra)
+                
+                # Run attack
+                import time
+                start_time = time.time()
+                
+                try:
+                    if combo_file:
+                        result = await hydra.attack(
+                            target=brute_widget.host_ip,
+                            service=brute_widget.service,
+                            combo_file=Path(combo_file),
+                            port=brute_widget.port,
+                            tasks=tasks,
+                            timeout=float(timeout),
+                            additional_args=additional_args if additional_args else None
+                        )
+                    else:
+                        result = await hydra.attack(
+                            target=brute_widget.host_ip,
+                            service=brute_widget.service,
+                            login_file=Path(username_file),
+                            password_file=Path(password_file),
+                            port=brute_widget.port,
+                            tasks=tasks,
+                            timeout=float(timeout),
+                            additional_args=additional_args if additional_args else None
+                        )
+                except asyncio.CancelledError:
+                    brute_widget.append_output("\n⚠️ Attack cancelled by user")
+                    brute_widget.mark_finished(False)
+                    return
+                
+                elapsed = time.time() - start_time
+                
+                # Display output
+                brute_widget.append_output("\n" + "="*60)
+                brute_widget.append_output("HYDRA OUTPUT:")
+                brute_widget.append_output("="*60 + "\n")
+                brute_widget.append_output(result.stdout)
+                if result.stderr:
+                    brute_widget.append_output("\nERRORS:")
+                    brute_widget.append_output(result.stderr)
+                
+                # Parse results
+                hydra_result = await hydra.parse_output(result)
+                
+                # Display results
+                brute_widget.append_output("\n" + "="*60)
+                brute_widget.append_output(f"✅ Attack completed in {elapsed:.1f}s")
+                brute_widget.append_output(f"   Attempts: {hydra_result.statistics.total_attempts}")
+                brute_widget.append_output(f"   Credentials found: {len(hydra_result.credentials)}")
+                
+                if hydra_result.credentials:
+                    brute_widget.append_output("\n🔑 CREDENTIALS FOUND:")
+                    for cred in hydra_result.credentials:
+                        brute_widget.append_output(
+                            f"   ✓ {cred.login}:{cred.password} on {cred.service}://{cred.host}:{cred.port}"
+                        )
+                        
+                        # Emit signal
+                        brute_widget.credentials_found.emit(cred.login, cred.password)
+                        
+                        # Save to database
+                        credential = Credential(
+                            host=cred.host,
+                            port=cred.port,
+                            service=cred.service,
+                            username=cred.login,
+                            password=cred.password,
+                            source="hydra",
+                            verified=True
+                        )
+                        self.database.save_credential(credential)
+                        logger.info(f"Saved credential: {cred.login}:{cred.password}")
+                    
+                    # Blink tab
+                    tab_index = brute_widget.property("tab_index")
+                    if tab_index is not None:
+                        self._blink_brute_tab(tab_index)
+                
+                brute_widget.set_stats(f"Completed - {len(hydra_result.credentials)} credentials found")
+                brute_widget.mark_finished(True)
+                
+            except Exception as e:
+                logger.error(f"Hydra attack error: {e}", exc_info=True)
+                brute_widget.append_output(f"\n❌ ERROR: {str(e)}")
+                brute_widget.mark_finished(False)
+        
+        # Run async
+        asyncio.create_task(run_attack_with_streaming())
+    
+    def _stop_hydra_attack(self, brute_widget: BruteWidget) -> None:
+        """
+        Stop running Hydra attack.
+        
+        Args:
+            brute_widget: BruteWidget to stop
+        """
+        hydra = brute_widget.property("hydra_tool")
+        if hydra and isinstance(hydra, HydraTool):
+            if hydra.kill_current_process():
+                brute_widget.append_output("\n⚠️ Process killed")
+                logger.info("Killed Hydra process")
+        
+        brute_widget.set_running(False)
+        brute_widget.set_stats("Stopped by user")
+    
+    def _on_credentials_found(self, username: str, password: str) -> None:
+        """
+        Handle credentials found signal.
+        
+        Args:
+            username: Found username
+            password: Found password
+        """
+        logger.info(f"Credentials found: {username}:{password}")
+        self.status_label.setText(f"🔑 Credentials found: {username}:***")
+    
+    def _blink_brute_tab(self, tab_index: int) -> None:
+        """
+        Blink brute tab to indicate credentials found (like legacy).
+        
+        Args:
+            tab_index: Tab index to blink
+        """
+        # Change tab text color to red
+        self.brute_tab_widget.tabBar().setTabTextColor(tab_index, QtGui.QColor('red'))
+        
+        # Also blink main Brute tab
+        self.main_tabs.tabBar().setTabTextColor(1, QtGui.QColor('red'))
+        
+        logger.info(f"Blinking tab {tab_index} - credentials found")
     
     def _setup_statusbar(self) -> None:
         """Setup status bar."""
@@ -920,6 +1218,12 @@ class MainWindow(QMainWindow):
             Qt.ItemDataRole.DisplayRole
         )
         
+        # Get port state
+        port_state = self.ports_model.data(
+            self.ports_model.index(row, self.ports_model.COL_STATE),
+            Qt.ItemDataRole.DisplayRole
+        )
+        
         # Get current host
         if not self.ports_model._current_host:
             return
@@ -959,40 +1263,45 @@ class MainWindow(QMainWindow):
         # Brute Force submenu
         bruteforce_menu = menu.addMenu("🔑 Brute Force")
         
-        # Add Hydra attack for common services
-        service_lower = service.lower() if service and service != "-" else ""
-        
-        # Map service names to Hydra service types
-        hydra_services = {
-            'ssh': 'ssh',
-            'ftp': 'ftp',
-            'telnet': 'telnet',
-            'mysql': 'mysql',
-            'postgres': 'postgres',
-            'postgresql': 'postgres',
-            'mssql': 'mssql',
-            'vnc': 'vnc',
-            'http': 'http-get',
-            'https': 'https-get',
-            'smb': 'smb',
-            'rdp': 'rdp'
-        }
-        
-        # Check if service is attackable
-        hydra_service = None
-        for svc_name, hydra_svc in hydra_services.items():
-            if svc_name in service_lower:
-                hydra_service = hydra_svc
-                break
-        
-        if hydra_service:
-            hydra_action = bruteforce_menu.addAction(f"Hydra - {service}")
-            hydra_action.triggered.connect(
-                lambda: self._launch_hydra_attack(host_ip, port_number, hydra_service)
-            )
+        # Check if port is open - only offer Hydra for open ports
+        if port_state and port_state.lower() != "open":
+            port_not_open = bruteforce_menu.addAction(f"Port not open ({port_state})")
+            port_not_open.setEnabled(False)
         else:
-            no_support = bruteforce_menu.addAction("No supported service detected")
-            no_support.setEnabled(False)
+            # Add Hydra attack for common services
+            service_lower = service.lower() if service and service != "-" else ""
+            
+            # Map service names to Hydra service types
+            hydra_services = {
+                'ssh': 'ssh',
+                'ftp': 'ftp',
+                'telnet': 'telnet',
+                'mysql': 'mysql',
+                'postgres': 'postgres',
+                'postgresql': 'postgres',
+                'mssql': 'mssql',
+                'vnc': 'vnc',
+                'http': 'http-get',
+                'https': 'https-get',
+                'smb': 'smb',
+                'rdp': 'rdp'
+            }
+            
+            # Check if service is attackable
+            hydra_service = None
+            for svc_name, hydra_svc in hydra_services.items():
+                if svc_name in service_lower:
+                    hydra_service = hydra_svc
+                    break
+            
+            if hydra_service:
+                hydra_action = bruteforce_menu.addAction(f"Hydra - {service}")
+                hydra_action.triggered.connect(
+                    lambda: self._launch_hydra_attack(host_ip, port_number, hydra_service)
+                )
+            else:
+                no_support = bruteforce_menu.addAction("No supported service detected")
+                no_support.setEnabled(False)
         
         # Show menu at cursor position
         menu.exec(self.ports_table.viewport().mapToGlobal(position))
@@ -1614,6 +1923,8 @@ class MainWindow(QMainWindow):
         """
         Launch Hydra brute force attack against a service.
         
+        Creates a new tab in the Brute tab widget with live output.
+        
         Args:
             host_ip: Target host IP
             port: Target port number
@@ -1632,10 +1943,10 @@ class MainWindow(QMainWindow):
             f"🎯 Target: {host_ip}:{port}\n"
             f"🔧 Service: {service}"
         )
-        info_label.setStyleSheet("padding: 10px; background-color: #2b2b2b; border-radius: 5px;")
+        info_label.setStyleSheet("padding: 10px; background-color: #2b2b2b; color: white; border-radius: 5px;")
         layout.addWidget(info_label)
         
-        # Wordlists group - SIMPLIFIED: Only one directory path
+        # Wordlists group
         wordlist_group = QtWidgets.QGroupBox("Wordlists")
         wordlist_layout = QtWidgets.QVBoxLayout()
         
@@ -1650,12 +1961,12 @@ class MainWindow(QMainWindow):
         info_text.setStyleSheet("color: #888; font-size: 10px; padding: 5px;")
         wordlist_layout.addWidget(info_text)
         
-        # Single wordlist directory selector
+        # Wordlist directory selector
         dir_layout = QtWidgets.QHBoxLayout()
         wordlist_edit = QtWidgets.QLineEdit()
-        wordlist_edit.setPlaceholderText("Path to wordlist directory (e.g., scripts/wordlists/)...")
+        wordlist_edit.setPlaceholderText("Path to wordlist directory...")
         
-        wordlist_browse = QtWidgets.QPushButton("📁 Browse Directory...")
+        wordlist_browse = QtWidgets.QPushButton("📁 Browse...")
         wordlist_browse.clicked.connect(
             lambda: self._browse_wordlist_directory(wordlist_edit)
         )
@@ -1664,7 +1975,7 @@ class MainWindow(QMainWindow):
         dir_layout.addWidget(wordlist_browse)
         wordlist_layout.addLayout(dir_layout)
         
-        # Set default to wordlists directory
+        # Set default
         default_dir = Path("scripts/wordlists")
         if default_dir.exists():
             wordlist_edit.setText(str(default_dir))
@@ -1676,16 +1987,17 @@ class MainWindow(QMainWindow):
         options_group = QtWidgets.QGroupBox("Attack Options")
         options_layout = QtWidgets.QFormLayout()
         
-        # Tasks (threads)
+        # Parallel tasks
         tasks_spin = QtWidgets.QSpinBox()
-        tasks_spin.setRange(1, 64)
+        tasks_spin.setMinimum(1)
+        tasks_spin.setMaximum(64)
         tasks_spin.setValue(self.config.tools.hydra_default_tasks)
-        tasks_spin.setSuffix(" threads")
         options_layout.addRow("Parallel Tasks:", tasks_spin)
         
         # Timeout
         timeout_spin = QtWidgets.QSpinBox()
-        timeout_spin.setRange(10, 3600)
+        timeout_spin.setMinimum(10)
+        timeout_spin.setMaximum(3600)
         timeout_spin.setValue(self.config.tools.hydra_default_timeout)
         timeout_spin.setSuffix(" seconds")
         options_layout.addRow("Timeout:", timeout_spin)
@@ -1702,116 +2014,54 @@ class MainWindow(QMainWindow):
         button_box.rejected.connect(dialog.reject)
         layout.addWidget(button_box)
         
-        # Show dialog and launch attack if accepted
-        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-            wordlist_path = wordlist_edit.text().strip()
-            
-            if not wordlist_path:
-                QMessageBox.warning(
-                    self,
-                    "Missing Wordlists",
-                    "Please select a wordlist directory."
-                )
-                return
-            
-            wordlist_dir = Path(wordlist_path)
-            if not wordlist_dir.exists():
-                QMessageBox.warning(
-                    self,
-                    "Invalid Path",
-                    f"Path does not exist:\n{wordlist_path}"
-                )
-                return
-            
-            # Analyze and prepare wordlists using smart strategy
-            try:
-                # Import strategy module
-                from legion.utils.wordlist_strategy import WordlistStrategy, AttackMode
-                import tempfile
-                
-                # Step 1: Analyze directory
-                self.status_label.setText("🔍 Analyzing wordlists...")
-                QtWidgets.QApplication.processEvents()  # Update UI
-                
-                analysis = WordlistStrategy.analyze_directory(wordlist_dir)
-                
-                # Step 2: Show analysis to user
-                analysis_msg = (
-                    f"📊 Wordlist Analysis:\n\n"
-                    f"Mode: {analysis.mode.value.upper()}\n"
-                    f"Combo files: {len(analysis.combo_files)} ({analysis.total_combo_entries} entries)\n"
-                    f"Username files: {len(analysis.username_files)} ({analysis.total_username_entries} entries)\n"
-                    f"Password files: {len(analysis.password_files)} ({analysis.total_password_entries} entries)\n"
-                    f"Estimated combinations: {analysis.estimated_combinations:,}\n\n"
-                    f"Recommendation:\n{analysis.recommendation}\n\n"
-                    f"Proceed with attack?"
-                )
-                
-                reply = QMessageBox.question(
-                    self,
-                    "Wordlist Strategy",
-                    analysis_msg,
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
-                )
-                
-                if reply == QMessageBox.StandardButton.No:
-                    self.status_label.setText("Attack cancelled")
-                    return
-                
-                # Step 3: Prepare files based on mode
-                temp_dir = Path(tempfile.gettempdir()) / "legion_wordlists"
-                
-                if analysis.mode == AttackMode.COMBO:
-                    # Use combo mode (-C)
-                    combo_file = WordlistStrategy.prepare_combo_file(
-                        analysis.combo_files,
-                        temp_dir,
-                        max_entries=10000
-                    )
-                    
-                    # Launch attack with combo file
-                    self._run_hydra_attack_async(
-                        host_ip,
-                        port,
-                        service,
-                        None,  # No username file
-                        None,  # No password file
-                        tasks_spin.value(),
-                        timeout_spin.value(),
-                        original_wordlist_path=str(wordlist_dir),
-                        combo_file=str(combo_file)
-                    )
-                
-                else:  # SEPARATE mode
-                    # Merge username/password files
-                    merged_user_file, merged_pass_file = WordlistStrategy.prepare_separate_files(
-                        analysis.username_files,
-                        analysis.password_files,
-                        temp_dir,
-                        max_entries=1000
-                    )
-                    
-                    # Launch attack with separate files
-                    self._run_hydra_attack_async(
-                        host_ip,
-                        port,
-                        service,
-                        str(merged_user_file),
-                        str(merged_pass_file),
-                        tasks_spin.value(),
-                        timeout_spin.value(),
-                        original_wordlist_path=str(wordlist_dir)
-                    )
-                
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Wordlist Processing Failed",
-                    f"Failed to process wordlists:\n{str(e)}"
-                )
-                logger.error(f"Wordlist processing error: {e}", exc_info=True)
-                return
+        # Show dialog
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+        
+        # Get values BEFORE dialog is destroyed
+        wordlist_path = wordlist_edit.text().strip()
+        tasks_value = tasks_spin.value()
+        timeout_value = timeout_spin.value()
+        
+        if not wordlist_path:
+            QMessageBox.warning(self, "Missing Wordlists", "Please select a wordlist directory.")
+            return
+        
+        # Create BruteWidget for this attack
+        tab_name = f"{service} ({port}/tcp)"
+        brute_widget = BruteWidget(host_ip, port, service, wordlist_path, self)
+        
+        # Connect signals with captured values (not widget references!)
+        brute_widget.attack_started.connect(
+            lambda: self._start_hydra_attack(
+                brute_widget, wordlist_path, tasks_value, timeout_value
+            )
+        )
+        brute_widget.attack_stopped.connect(
+            lambda: self._stop_hydra_attack(brute_widget)
+        )
+        brute_widget.credentials_found.connect(self._on_credentials_found)
+        
+        # Remove "Getting Started" placeholder if it exists
+        if self.brute_tab_widget.count() == 1:
+            first_tab_widget = self.brute_tab_widget.widget(0)
+            if isinstance(first_tab_widget, QtWidgets.QLabel):
+                self.brute_tab_widget.removeTab(0)
+        
+        # Add tab and switch to it
+        tab_index = self.brute_tab_widget.addTab(brute_widget, tab_name)
+        self.brute_tab_widget.setCurrentIndex(tab_index)
+        
+        # Switch to Brute tab in main tabs
+        self.main_tabs.setCurrentIndex(1)  # Index 1 = Brute tab
+        
+        # Store widget reference for management
+        brute_widget.setProperty("tab_index", tab_index)
+        brute_widget.setProperty("host_ip", host_ip)
+        
+        logger.info(f"Created Hydra attack tab: {tab_name} for {host_ip}:{port}")
+        
+        self.status_label.setText(f"💡 Hydra attack ready: {tab_name}. Click 'Run' to start.")
     
     def _browse_wordlist_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
         """
@@ -1926,6 +2176,18 @@ class MainWindow(QMainWindow):
             combo_file: Path to combo file (user:pass format) - if provided, uses -C mode
         """
         async def run_attack():
+            # Initialize Hydra tool first (needed for process killing)
+            hydra = HydraTool()
+            
+            if not await hydra.validate():
+                QMessageBox.critical(
+                    self,
+                    "Hydra Not Found",
+                    "Hydra is not installed or not found in PATH.\n"
+                    "Please install Hydra and configure the path in Settings."
+                )
+                return
+            
             # Create and show progress dialog
             progress_dialog = QtWidgets.QProgressDialog(
                 f"Running Hydra attack on {service}://{host_ip}:{port}...",
@@ -1947,6 +2209,9 @@ class MainWindow(QMainWindow):
                 nonlocal cancelled
                 cancelled = True
                 progress_dialog.setLabelText("⚠️ Cancelling attack...")
+                # Actually kill the Hydra process
+                if hydra.kill_current_process():
+                    logger.info("Killed running Hydra process")
             
             progress_dialog.canceled.connect(on_cancel)
             progress_dialog.show()
@@ -1982,18 +2247,6 @@ class MainWindow(QMainWindow):
                         f"🔑 Hydra attacking {service}://{host_ip}:{port} (SEPARATE mode)..."
                     )
                 
-                # Initialize Hydra tool
-                hydra = HydraTool()
-                
-                if not await hydra.validate():
-                    QMessageBox.critical(
-                        self,
-                        "Hydra Not Found",
-                        "Hydra is not installed or not found in PATH.\n"
-                        "Please install Hydra and configure the path in Settings."
-                    )
-                    return
-                
                 # Run attack (combo mode or separate mode)
                 # For HTTP services, pass path as module option (-m)
                 additional_args = []
@@ -2001,42 +2254,50 @@ class MainWindow(QMainWindow):
                     # Use -m option for HTTP path
                     additional_args = ["-m", "/"]
                 
-                if combo_file:
-                    # Combo mode: -C file
-                    result = await hydra.attack(
-                        target=host_ip,
-                        service=service,
-                        combo_file=Path(combo_file),
-                        port=port,
-                        tasks=tasks,
-                        timeout=float(timeout),
-                        additional_args=additional_args if additional_args else None
-                    )
-                else:
-                    # Separate mode: -L users -P passwords
-                    result = await hydra.attack(
-                        target=host_ip,
-                        service=service,
-                        login_file=Path(username_file),
-                        password_file=Path(password_file),
-                        port=port,
-                        tasks=tasks,
-                        timeout=float(timeout),
-                        additional_args=additional_args if additional_args else None
-                    )
-                
-                # Stop progress timer and close dialog
-                progress_timer.stop()
-                progress_dialog.close()
-                
-                # Check if user cancelled
-                if cancelled:
+                # Wrap attack in try/except to catch cancellation
+                try:
+                    if combo_file:
+                        # Combo mode: -C file
+                        result = await hydra.attack(
+                            target=host_ip,
+                            service=service,
+                            combo_file=Path(combo_file),
+                            port=port,
+                            tasks=tasks,
+                            timeout=float(timeout),
+                            additional_args=additional_args if additional_args else None
+                        )
+                    else:
+                        # Separate mode: -L users -P passwords
+                        result = await hydra.attack(
+                            target=host_ip,
+                            service=service,
+                            login_file=Path(username_file),
+                            password_file=Path(password_file),
+                            port=port,
+                            tasks=tasks,
+                            timeout=float(timeout),
+                            additional_args=additional_args if additional_args else None
+                        )
+                except asyncio.CancelledError:
+                    # Attack was cancelled
+                    progress_timer.stop()
+                    progress_dialog.close()
                     self.status_label.setText("⚠️ Hydra attack cancelled by user")
                     QMessageBox.information(
                         self,
                         "Attack Cancelled",
                         "Hydra attack was cancelled by user."
                     )
+                    return
+                
+                # Stop progress timer and close dialog
+                progress_timer.stop()
+                progress_dialog.close()
+                
+                # Check if user cancelled (backup check)
+                if cancelled:
+                    self.status_label.setText("⚠️ Hydra attack cancelled by user")
                     return
                 
                 # Parse results
